@@ -1,0 +1,92 @@
+﻿@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+:root {
+  font-family: Inter, sans-serif;
+  color: #18181b;
+  background: #fafafa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --red: #d71920;
+  --deep-red: #8f0f14;
+  --soft-red: #fdebec;
+  --pale-red: #fff6f7;
+  --ink: #18181b;
+  --slate: #52525b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --canvas: #fafafa;
+  --success: #00852d;
+  --success-tint: #dcfce7;
+  --warning: #a56500;
+  --warning-tint: #fef3c7;
+  --info-tint: #dbeafe;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+}
+h2 {
+  font-size: 20px;
+  line-height: 1.4;
+}
+h3 {
+  font-size: 16px;
+  line-height: 1.4;
+}
+p {
+  line-height: 1.6;
+}
+small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+input[type="checkbox"] {
+  accent-color: var(--red);
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
