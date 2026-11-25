@@ -1,3 +1,4 @@
+import { seed } from "./fixture.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -8,7 +9,6 @@ import {
   normalize,
   reportRows,
   sameSlots,
-  seed,
   sheetFingerprint,
   slotKey,
   toCsv,
@@ -170,4 +170,28 @@ test("report reconciliation and export cover 1000 distinct rows", () => {
     toCsv(rows.map((r) => [r.id, r.coach, hours(r.head)])).split("\r\n").length,
     1000,
   );
+});
+import { seed as initialState } from "../src/model.ts";
+test("new installs have no sample sessions or availability but retain demo accounts", () => {
+  const state = initialState();
+  assert.equal(state.coaches.length, 6);
+  for (const key of ["sessions", "assignments", "submissions", "requests", "audit"] as const) assert.equal(state[key].length, 0);
+  for (const key of ["availability", "attendance", "drafts", "resolutions", "finalised"] as const) assert.deepEqual(state[key], {});
+});
+import { removeLegacyDemo } from "../src/migrations.ts";
+test("legacy cleanup removes samples and preserves user programmes and records", () => {
+  const legacy = seed();
+  delete legacy.legacyDemoRemoved;
+  legacy.sessions.push({ ...legacy.sessions[0], id: "custom-programme", title: "My programme" });
+  legacy.assignments.push({ ...legacy.assignments[0], id: "custom-assignment", sessionId: "custom-programme" });
+  legacy.attendance["custom-assignment"] = structuredClone(legacy.attendance[legacy.assignments[0].id]);
+  const cleaned = removeLegacyDemo(legacy);
+  assert.deepEqual(cleaned.sessions.map((s) => s.id), ["custom-programme"]);
+  assert.deepEqual(cleaned.assignments.map((a) => a.id), ["custom-assignment"]);
+  assert.deepEqual(Object.keys(cleaned.attendance), ["custom-assignment"]);
+  assert.deepEqual(cleaned.availability.c2, ["2026-09-05"]);
+  assert.equal(cleaned.requests.length, 0);
+  assert.equal(cleaned.submissions.length, 0);
+  assert.equal(legacy.sessions.length, 5);
+  assert.equal(removeLegacyDemo(cleaned), cleaned);
 });

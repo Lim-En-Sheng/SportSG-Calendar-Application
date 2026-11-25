@@ -31,19 +31,37 @@ Coach Calendar supports three roles, each with a distinct part in planning and v
 
 - A consistent calendar layout across all three roles, with previous/next month navigation.
 - Programme details for the selected date, including time and venue.
-- Assistant Coach availability selection and submission.
+- Uses live **Singapore time (Asia/Singapore)**. The calendar opens on today; timesheets and reports open on the current month.
+- Past dates appear grey. Assistant Coaches cannot select them; Head Coaches and Admin can view historical sessions.
+- Availability is saved separately for each Assistant Coach and month, including after a refresh.
 - Assigned, completed, and cancelled session views.
 - Change requests that stay pending until the Head Coach approves or rejects them.
 - Responsive layouts: desktop calendar cells show programme names; mobile cells show session counts with full details below.
+
+### Monthly availability
+
+| Date colour | Meaning                                              |
+| :---------- | :--------------------------------------------------- |
+| **White**   | Not selected                                         |
+| **Yellow**  | Selected availability; stays yellow after submission |
+| **Green**   | Head Coach has confirmed deployment                  |
+| **Grey**    | Past date; disabled for Assistant Coach selection    |
+
+- Click today or a future date to select it, then **Submit availability** for that month.
+- Submitted months show a yellow **Pending** summary. Status persists separately for each coach and month.
+- Use **Update availability** to revise dates. Clicking a yellow date turns it white; submit to save or **Cancel update** to discard edits.
+- Submitting **0 days** returns to **Select dates available**, without Pending status.
+- Other months remain unchanged. Past-date greying takes precedence over selection colours.
 
 ### 👥 Coach assignments
 
 - View coaches who have submitted availability for a programme date.
 - Select coaches using checkboxes and choose their assigned time blocks.
-- Already assigned coaches have checked, disabled checkboxes.
+- Assigned coaches start checked; uncheck them to remove their assignment when submitting.
 - Numbered assigned-coach lists and an **assigned / required** counter, such as **3/10**.
 - One-hour assignment blocks, with a shorter final block when a session ends partway through an hour.
 - Approved change requests retain the cancelled assignment in session history.
+- Head Coaches can open **Update assignments**, uncheck confirmed coaches, and **Submit assignments** to unassign them. Cancel discards pending changes. Cancelled assignments remain in session history and can be assigned again.
 
 ### ✅ Hourly attendance
 
@@ -153,17 +171,28 @@ npm.cmd run preview
 
 ## 🎮 Try the demo
 
-The app first opens as **Head Coach**. Use the profile avatar in the top-right corner to switch roles or select an Assistant Coach. The selected role is remembered when you refresh the same browser tab.
+The root URL and **/login** open the login page. Click **Full name / Coach ID**, select a demo account, and click **Log in**. The password field is greyed out and disabled.
 
-1. **Explore assignments.** Select **19 September 2026** to see the assigned coaches. Open **Update assignments** to select available coaches and hourly blocks.
-2. **Record attendance.** Open **Take attendance**. Mark individual blocks or use **Add coach** to record partial-hour, last-minute cover.
-3. **Verify Ryan's hours.** Switch to **Assistant Coach → Ryan Coo**, then open **My sessions → Verify worked hours**. Review **19 September**, explain the difference, verify the slots, and send the revised timesheet.
-4. **Resolve the difference.** Switch to **Admin → Reports**. Review Ryan's record, choose the accepted hours, and enter a reason.
-5. **Verify and export.** Verify the final sheet once all completed-session differences are resolved. Open the full report to try the filters and exports.
+| Account                                                                       | Role                                                           |
+| :---------------------------------------------------------------------------- | :------------------------------------------------------------- |
+| Maya Chen (HC)                                                                | Head Coach                                                     |
+| Marcus Tan, Ryan Coo, Priya Nair, Aisyah Rahman, Sarah Koh, Danish Hakim (AC) | Assistant Coach; each has separate availability and timesheets |
+| Admin                                                                         | Programme management and reporting                             |
 
-**Example clock:** `20 September 2026, 14:00 SGT`.
+The **top-right avatar** opens account details and **Sign out**. There is no role switcher or footer Profile button. Sign out to choose another account. Refreshing a workspace keeps the selected account in the same tab; opening the root URL shows login again. This is a demo account picker, not production authentication.
 
-The sample clock keeps the September verification window open so you can try the Figma scenario. Turn it off in the profile dialog to use the real Singapore date and time. The first-run data is fictional; your changes are saved in this browser.
+### Start a workflow
+
+New browser installs start with an empty calendar and no availability, assignments, or attendance. Demo login accounts are retained.
+
+1. **Create a programme.** Sign in as Admin and create a programme for today or a future date.
+2. **Submit availability.** Sign in as an Assistant Coach, select the programme date, and submit that month's availability.
+3. **Deploy coaches.** Sign in as Head Coach, select the date, open **Update assignments**, choose coaches and hourly blocks, and submit. Uncheck assigned coaches in this same form to unassign them; **Cancel** discards changes.
+4. **Record attendance.** Use **Take attendance** to mark individual blocks. **Add coach** records last-minute cover and actual worked slots.
+5. **Verify worked hours.** After the session ends, sign in as the Assistant Coach and open **My sessions > Verify worked hours**. Review the slots and submit within the same calendar month.
+6. **Review and export.** Admin compares the sources, resolves differences, verifies the final attendance sheet, and exports the reports.
+
+The app uses the live Singapore clock, with no fixed Figma example date. Past-month timesheets cannot be revised. Existing legacy September demo records are removed automatically on load; user-created programmes and their records are preserved.
 
 ## 🛠️ Development
 
@@ -206,7 +235,7 @@ Coach-Calendar/
 │   ├── Reports.tsx            # Admin review, final verification and exports
 │   ├── Programmes.tsx         # Programme management and coach directory
 │   ├── components.tsx         # Shared controls, dialogs and slot editor
-│   ├── model.ts               # Types, sample data and reconciliation rules
+│   ├── model.ts               # Types, empty initial state and reconciliation rules
 │   ├── store.tsx              # Persistence, role settings and action history
 │   ├── App.css                # Screen layouts and responsive styling
 │   └── index.css              # Typography, base styles and design tokens
@@ -223,12 +252,14 @@ Generated output such as `dist/`, `node_modules/`, and `test-results/` is exclud
 
 ### Test coverage
 
-The current test suite contains **10 business-rule tests** and **8 browser workflow tests** covering:
+The automated business-rule and browser tests cover:
 
 - Worked-interval comparison, gaps, partial-hour cover, and invalid or overlapping slots.
 - Singapore-time verification windows and month-end boundaries.
 - Draft versus submitted timesheets, missing attendance, and stale resolutions.
-- Coach assignments, disabled checkboxes, and change-request history.
+- Checkbox-based assignment, unassignment, and cancellation history.
+- Availability colours, disabled past dates, empty submissions, and month/account isolation.
+- Login, profile, live Singapore dates, and legacy browser-data cleanup.
 - Attendance notes and role preferences after refresh.
 - Assistant verification through Admin resolution and final-sheet verification.
 - Actual CSV and Excel downloads, including CSV escaping.
@@ -241,12 +272,12 @@ Browser tests start a development server when needed. Screenshots and failure de
 
 | Available locally                              | Needed before a shared production launch                    |
 | :--------------------------------------------- | :---------------------------------------------------------- |
-| Demonstration role switching                   | Authentication and server-enforced permissions              |
+| Demo account login and profile                 | Authentication and server-enforced permissions              |
 | Browser-saved application data                 | Shared database, backups, and multi-user synchronisation    |
 | Client-side time-window checks                 | Server-enforced submission windows and trusted timestamps   |
 | Versioned submissions and local action history | Immutable audit records and concurrent-edit handling        |
 | Downloadable spreadsheets                      | Connected Google/Microsoft accounts for direct integrations |
-| Local development and production builds        | Hosting and deployment configuration                        |
+| Local development and production builds        | Production operations and deployment of updated builds      |
 
 Application data uses the browser storage key **`coach-calendar-v1`**. View preferences use **`coach-calendar-view`** in session storage. Records are not synchronised between users, devices, browser profiles, or different site origins. Clearing browser site data removes the locally saved records.
 
@@ -273,6 +304,14 @@ The interface is based on the [Coach Calendar Figma design](https://www.figma.co
 | Admin resolution               | `243:251`                       |
 | Programme management           | `146:109`, `146:142`, `146:219` |
 
-The placeholder brand is named **Coach Calendar**. Session times follow the newer hourly-attendance design. Historical sample sessions are linked to their calendar entries, and responsive layouts replace fixed Figma positioning.
+The placeholder brand is named **Coach Calendar**. Session times follow the newer hourly-attendance design. Historical scenarios are test fixtures only; responsive layouts replace fixed Figma positioning.
 
 </details>
+
+### Local data and publishing
+
+`src/Login.tsx` defines login; `src/migrations.ts` removes legacy demo records. `tests/fixture.ts` contains historical scenarios used only by tests.
+
+Application records use `coach-calendar-v1` in local storage. Account preferences use `coach-calendar-view` and demo sign-in uses `coach-calendar-signed-in` in session storage. Data is not shared across browsers or users.
+
+Local edits and GitHub pushes do not automatically update the public site. Build and redeploy to publish changes; `.openai/hosting.json` identifies the existing Sites project.

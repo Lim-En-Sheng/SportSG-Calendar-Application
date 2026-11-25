@@ -1,24 +1,51 @@
 ﻿import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { seed } from "../../src/model";
+import { seed } from "../fixture";
 
 async function role(page: Page, name: string) {
+  await page.getByRole("button", { name: "Open profile" }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  const account =
+    name === "Head Coach"
+      ? "Maya Chen"
+      : name === "Assistant Coach"
+        ? "Ryan Coo"
+        : "Admin";
   await page
-    .getByRole("button", { name: "Switch role and demo settings" })
-    .click();
-  await page
-    .getByRole("combobox", { name: "Role", exact: true })
-    .selectOption(name);
-  await page.getByRole("button", { name: `Continue as ${name}` }).click();
+    .getByRole("combobox", { name: "Full name / Coach ID" })
+    .selectOption(
+      account === "Maya Chen"
+        ? "head"
+        : account === "Ryan Coo"
+          ? "c2"
+          : "admin",
+    );
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
 }
 
-test("Figma calendar layout, disabled assignments and month navigation", async ({
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((fixture) => {
+    if (!localStorage.getItem("coach-calendar-v1"))
+      localStorage.setItem("coach-calendar-v1", JSON.stringify(fixture));
+  }, seed());
+  await page.clock.setFixedTime(new Date("2026-09-20T06:00:00Z"));
+  await page.goto("/");
+  await page
+    .getByRole("combobox", { name: "Full name / Coach ID" })
+    .selectOption("head");
+  await page.getByRole("button", { name: "Log in", exact: true }).click();
+});
+
+test("Figma calendar layout, editable assignments and month navigation", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Deploy your coaching team" }),
   ).toBeVisible();
@@ -31,8 +58,8 @@ test("Figma calendar layout, disabled assignments and month navigation", async (
   });
   await page.getByRole("button", { name: "Update assignments" }).click();
   await expect(
-    page.getByRole("checkbox", { name: "Marcus Tan already assigned" }),
-  ).toBeDisabled();
+    page.getByRole("checkbox", { name: "Marcus Tan", exact: true }),
+  ).toBeChecked();
   await page
     .getByRole("checkbox", { name: /Aisyah Rahman/ })
     .first()
@@ -42,6 +69,9 @@ test("Figma calendar layout, disabled assignments and month navigation", async (
     page.getByRole("heading", { name: "Assigned coaches 4/10" }),
   ).toBeVisible();
   await page.reload();
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Assigned coaches 4/10" }),
   ).toBeVisible();
@@ -105,7 +135,10 @@ test("assistant verifies, Admin resolves, final sheet verifies, CSV and Excel ex
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await role(page, "Assistant Coach");
   await page.getByRole("link", { name: "My sessions", exact: true }).click();
   await page
@@ -135,7 +168,11 @@ test("assistant verifies, Admin resolves, final sheet verifies, CSV and Excel ex
   await role(page, "Admin");
   await page.getByRole("link", { name: "Reports", exact: true }).click();
   await page.getByRole("button", { name: "Review 1 differences" }).click();
-  await page.getByRole("button", { name: "Ryan Coo", exact: true }).click();
+  await page
+    .getByRole("row")
+    .filter({ hasText: "ATT-0008" })
+    .getByRole("button", { name: "Ryan Coo", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Resolve difference", exact: true })
     .click();
@@ -179,7 +216,10 @@ test("assistant verifies, Admin resolves, final sheet verifies, CSV and Excel ex
 test("Admin creates a programme and report filters have empty states", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await role(page, "Admin");
   await page
     .getByRole("link", { name: "Manage programmes", exact: true })
@@ -209,7 +249,10 @@ test("mobile layout and exact Figma assets load without page overflow", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Deploy your coaching team" }),
   ).toBeVisible();
@@ -238,7 +281,10 @@ test("mobile layout and exact Figma assets load without page overflow", async ({
 test("approved changes remain in cancelled history and role survives refresh", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await role(page, "Assistant Coach");
   await page.getByRole("link", { name: "My sessions", exact: true }).click();
@@ -253,9 +299,9 @@ test("approved changes remain in cancelled history and role survives refresh", a
   await expect(
     page.getByRole("heading", { name: "My sessions", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Switch role and demo settings" }),
-  ).toHaveText("RC");
+  await expect(page.getByRole("button", { name: "Open profile" })).toHaveText(
+    "RC",
+  );
 });
 
 test("attendance notes survive saving, reload and later hour edits", async ({
@@ -296,7 +342,10 @@ test("1000-row report paginates and exports every filtered row", async ({
   await page.addInitScript((data) => {
     localStorage.setItem("coach-calendar-v1", JSON.stringify(data));
   }, state);
-  await page.goto("/");
+  await page.goto("/calendar");
+  await page
+    .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
+    .click();
   await role(page, "Admin");
   await page.getByRole("link", { name: "Reports", exact: true }).click();
   await page

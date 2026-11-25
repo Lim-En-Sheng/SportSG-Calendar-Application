@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { removeLegacyDemo } from "./migrations";
 import { seed, sgtNow } from "./model";
 import type { Role, State } from "./model";
 const KEY = "coach-calendar-v1";
-function preferences(): { role: Role; coachId: string; demo: boolean } {
+function preferences(): { role: Role; coachId: string } {
   try {
     const saved = JSON.parse(
       sessionStorage.getItem("coach-calendar-view") ?? "{}",
@@ -13,10 +14,9 @@ function preferences(): { role: Role; coachId: string; demo: boolean } {
         ? saved.role
         : "Head Coach",
       coachId: typeof saved.coachId === "string" ? saved.coachId : "c2",
-      demo: saved.demo !== false,
     };
   } catch {
-    return { role: "Head Coach", coachId: "c2", demo: true };
+    return { role: "Head Coach", coachId: "c2" };
   }
 }
 function read(): State {
@@ -28,8 +28,17 @@ function read(): State {
         parsed.schema === 1 &&
         Array.isArray(parsed.sessions) &&
         Array.isArray(parsed.assignments)
-      )
-        return parsed;
+      ) {
+        const migrated = removeLegacyDemo(parsed);
+        if (migrated !== parsed) {
+          try {
+            localStorage.setItem(KEY, JSON.stringify(migrated));
+          } catch {
+            /* Use cleaned data in memory if storage is unavailable. */
+          }
+        }
+        return migrated;
+      }
     }
   } catch {
     /* Preserve unrecognised storage; the next successful save replaces it. */
@@ -39,11 +48,11 @@ function read(): State {
 type Store = {
   state: State;
   role: Role;
-  setRole: (r: Role) => void;
+  signedIn: boolean;
+  signIn: (r: Role, id?: string) => void;
+  signOut: () => void;
   coachId: string;
-  setCoachId: (id: string) => void;
-  demo: boolean;
-  setDemo: (b: boolean) => void;
+
   now: string;
   notice: string;
   notify: (s: string) => void;
@@ -58,24 +67,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ? preferences().coachId
       : state.coaches[0].id,
   );
-  const [demo, setDemo] = useState(() => preferences().demo);
+  const [signedIn, setSignedIn] = useState(() => {
+    try {
+      return sessionStorage.getItem("coach-calendar-signed-in") === "true";
+    } catch {
+      return false;
+    }
+  });
+  function signIn(nextRole: Role, id = "c2") {
+    if (!state.coaches.some((coach) => coach.id === id)) return;
+    setRole(nextRole);
+    setCoachId(id);
+    setSignedIn(true);
+    try {
+      sessionStorage.setItem("coach-calendar-signed-in", "true");
+    } catch {
+      /* In-memory session remains available. */
+    }
+  }
+  function signOut() {
+    setSignedIn(false);
+    notify("");
+    try {
+      sessionStorage.removeItem("coach-calendar-signed-in");
+    } catch {
+      /* In-memory session is cleared. */
+    }
+  }
   const [liveNow, setLiveNow] = useState(sgtNow);
   useEffect(() => {
     try {
       sessionStorage.setItem(
         "coach-calendar-view",
-        JSON.stringify({ role, coachId, demo }),
+        JSON.stringify({ role, coachId }),
       );
     } catch {
       /* Session preferences are optional. */
     }
-  }, [role, coachId, demo]);
+  }, [role, coachId]);
   useEffect(() => {
     const timer = window.setInterval(() => setLiveNow(sgtNow()), 1000);
     return () => window.clearInterval(timer);
   }, []);
   const [notice, notify] = useState("");
-  const now = demo ? "2026-09-20T14:00" : liveNow;
+  const now = liveNow;
   function commit(action: string, detail: string, fn: (s: State) => void) {
     const next = structuredClone(state);
     fn(next);
@@ -103,11 +138,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         role,
-        setRole,
+        signedIn,
+        signIn,
+        signOut,
         coachId,
-        setCoachId,
-        demo,
-        setDemo,
+
         now,
         notice,
         notify,

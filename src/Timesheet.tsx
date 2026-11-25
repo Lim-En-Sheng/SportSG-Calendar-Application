@@ -21,8 +21,8 @@ import {
 import type { Slot } from "./model";
 
 export function Timesheet() {
-  const { state, coachId, now, commit, demo } = useStore();
-  const [month, setMonth] = useState("2026-09");
+  const { state, coachId, now, commit } = useStore();
+  const [month, setMonth] = useState(() => now.slice(0, 7));
   const [review, setReview] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [explanation, setExplanation] = useState("");
@@ -87,10 +87,7 @@ export function Timesheet() {
           Submit or revise completed sessions before the last day of the month,
           11:59 PM (SGT).
         </p>
-        <small>
-          {demo ? "Example clock" : "Current Singapore time"} ·{" "}
-          {now.replace("T", " ")}
-        </small>
+        <small>Current Singapore time · {now.replace("T", " ")}</small>
       </div>
       {latest && (
         <div className="notice success">

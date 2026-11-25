@@ -276,7 +276,7 @@ export function Reports() {
   const { state, commit, now, notify } = useStore();
   const [params, setParams] = useSearchParams();
   const sheet = params.get("sheet") ?? "overview";
-  const month = params.get("month") ?? "2026-09";
+  const month = params.get("month") ?? now.slice(0, 7);
   const query = params.get("q") ?? "",
     coach = params.get("coach") ?? "",
     programme = params.get("programme") ?? "",

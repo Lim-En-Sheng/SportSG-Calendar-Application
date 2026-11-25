@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Calendar, Sessions } from "./Calendar";
@@ -16,6 +17,7 @@ import { Coaches, CreateProgramme, Programmes } from "./Programmes";
 import { Button, Modal } from "./components";
 import { StoreProvider, useStore } from "./store";
 import type { Role } from "./model";
+import { Login } from "./Login";
 import "./App.css";
 
 function Guard({ roles, children }: { roles: Role[]; children: ReactNode }) {
@@ -26,26 +28,29 @@ function Shell() {
   const {
     state,
     role,
-    setRole,
+    signedIn,
+    signOut,
     coachId,
-    setCoachId,
-    demo,
-    setDemo,
+
+    now,
     notice,
     notify,
   } = useStore();
+  const { pathname } = useLocation();
   const navigate = useNavigate(),
     [profile, setProfile] = useState(false);
-  const initials =
+  const name =
     role === "Admin"
-      ? "AD"
+      ? "Admin"
       : role === "Head Coach"
-        ? "HC"
-        : state.coaches
-            .find((c) => c.id === coachId)!
-            .name.split(" ")
-            .map((n) => n[0])
-            .join("");
+        ? "Maya Chen"
+        : state.coaches.find((c) => c.id === coachId)!.name;
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("");
+  if (pathname === "/" || pathname === "/login") return <Login />;
+  if (!signedIn) return <Navigate to="/login" replace />;
   return (
     <>
       <header className={`top-nav ${role === "Admin" ? "admin-nav" : ""}`}>
@@ -67,8 +72,8 @@ function Shell() {
         </nav>
         <button
           className="avatar"
-          aria-label="Switch role and demo settings"
-          title={`${role} · Switch role`}
+          aria-label="Open profile"
+          title={`${name} - Profile`}
           onClick={() => setProfile(true)}
         >
           {initials}
@@ -127,15 +132,9 @@ function Shell() {
       </main>
       <footer className="app-footer">
         <span>
-          Local prototype · {role} ·{" "}
-          {demo
-            ? "Sample clock: 20 September 2026 (SGT)"
-            : "Live Singapore clock"}{" "}
-          · Data saved in this browser
+          Local prototype · {role} · Live Singapore time:{" "}
+          {now.replace("T", " ")} (SGT) · Data saved in this browser
         </span>
-        <Button variant="link" onClick={() => setProfile(true)}>
-          Switch role
-        </Button>
       </footer>
       {notice && (
         <div className="toast" role="status">
@@ -146,55 +145,27 @@ function Shell() {
         </div>
       )}
       {profile && (
-        <Modal title="Explore Coach Calendar" onClose={() => setProfile(false)}>
-          <p>
-            Switch between the three roles to try the complete coaching
-            workflow. This is a local demo, not a sign-in system.
-          </p>
-          <label>
-            Role
-            <select
-              value={role}
-              onChange={(e) => {
-                setRole(e.target.value as Role);
-                navigate("/calendar");
-              }}
-            >
-              {(["Head Coach", "Assistant Coach", "Admin"] as Role[]).map(
-                (r) => (
-                  <option key={r}>{r}</option>
-                ),
-              )}
-            </select>
-          </label>
-          {role === "Assistant Coach" && (
-            <label>
-              Coach
-              <select
-                value={coachId}
-                onChange={(e) => setCoachId(e.target.value)}
-              >
-                {state.coaches.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label className="check-line">
-            <input
-              type="checkbox"
-              checked={demo}
-              onChange={(e) => setDemo(e.target.checked)}
-            />
-            Use the Figma example clock (20 September 2026)
-          </label>
+        <Modal title="Your profile" onClose={() => setProfile(false)}>
+          <div className="profile-summary">
+            <span className="avatar">{initials}</span>
+            <div>
+              <h3>{name}</h3>
+              <p className="muted">{role}</p>
+              <p className="small muted">Basketball Academy</p>
+            </div>
+          </div>
           <p className="small muted">
-            The example clock lets you verify September sessions during their
-            monthly window. Turn it off to enforce the real Singapore date.
+            Local demo account - Data saved in this browser.
           </p>
-          <Button onClick={() => setProfile(false)}>Continue as {role}</Button>
+          <Button
+            onClick={() => {
+              setProfile(false);
+              signOut();
+              navigate("/login", { replace: true });
+            }}
+          >
+            Sign out
+          </Button>
         </Modal>
       )}
     </>

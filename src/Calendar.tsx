@@ -18,12 +18,47 @@ import type { Session } from "./model";
 
 export function Calendar() {
   const { state, role, coachId, commit, now } = useStore();
-  const [month, setMonth] = useState(new Date(2026, 8, 1));
-  const [selected, setSelected] = useState("2026-09-19");
-  const [sessionId, setSessionId] = useState("s19");
+  const [month, setMonth] = useState(() =>
+    startOfMonth(parseISO(now.slice(0, 10))),
+  );
+  const [selected, setSelected] = useState(() => now.slice(0, 10));
+  const [sessionId, setSessionId] = useState("");
   const [editing, setEditing] = useState(false);
+  const [removed, setRemoved] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [available, setAvailable] = useState(state.availability[coachId] ?? []);
+  const [editingAvailability, setEditingAvailability] = useState<string | null>(
+    null,
+  );
+  const monthKey = format(month, "yyyy-MM");
+  const submitted =
+    !!state.availabilitySubmissions?.[coachId]?.[monthKey] &&
+    (state.availability[coachId] ?? []).some((date) =>
+      date.startsWith(monthKey),
+    );
+  const updatingAvailability = editingAvailability === monthKey;
+  const savedDates = state.availability[coachId] ?? [];
+  const hasAssignment = (date: string) =>
+    state.assignments.some(
+      (a) =>
+        !a.cancelled &&
+        a.coachId === coachId &&
+        state.sessions.some((s) => s.id === a.sessionId && s.date === date),
+    );
+  const pendingDates = savedDates.filter(
+    (date) => date.startsWith(monthKey) && !hasAssignment(date),
+  );
+  const pendingSessions = submitted
+    ? state.sessions.filter(
+        (s) =>
+          s.date.startsWith(monthKey) &&
+          savedDates.includes(s.date) &&
+          !state.assignments.some(
+            (a) =>
+              !a.cancelled && a.sessionId === s.id && a.coachId === coachId,
+          ),
+      )
+    : [];
   const [newAssignments, setNewAssignments] = useState<
     Record<string, string[]>
   >({});
@@ -44,11 +79,17 @@ export function Calendar() {
   const assistant = role === "Assistant Coach";
   const head = role === "Head Coach";
   function choose(date: string) {
+    if (assistant && date < now.slice(0, 10)) return;
     setSelected(date);
     setSessionId("");
     setEditing(false);
     setPicked([]);
-    if (assistant && date >= now.slice(0, 10))
+    if (
+      assistant &&
+      date.startsWith(monthKey) &&
+      date >= now.slice(0, 10) &&
+      (!submitted || updatingAvailability)
+    )
       setAvailable((v) =>
         v.includes(date) ? v.filter((d) => d !== date) : [...v, date],
       );
@@ -114,11 +155,19 @@ export function Calendar() {
                   type="button"
                   key={key}
                   aria-label={format(day, "EEEE, d MMMM yyyy")}
-                  aria-description={
-                    events.map((s) => s.title).join("; ") || "No programme"
+                  aria-description={[
+                    key < now.slice(0, 10) ? "Past date" : "",
+                    events.map((s) => s.title).join("; ") || "No programme",
+                  ]
+                    .filter(Boolean)
+                    .join(". ")}
+                  disabled={assistant && key < now.slice(0, 10)}
+                  aria-pressed={
+                    assistant
+                      ? available.includes(key) || hasAssignment(key)
+                      : selected === key
                   }
-                  aria-pressed={selected === key}
-                  className={`day ${!isSameMonth(day, month) ? "outside" : ""} ${selected === key ? "selected" : ""} ${assistant && available.includes(key) ? "available" : ""} ${!assistant && events.some((s) => state.assignments.some((a) => !a.cancelled && a.sessionId === s.id)) ? "deployed" : ""}`}
+                  className={`day ${key < now.slice(0, 10) ? "past" : ""} ${!isSameMonth(day, month) ? "outside" : ""} ${!assistant && selected === key ? "selected" : ""} ${assistant && hasAssignment(key) ? "assigned-date" : assistant && available.includes(key) ? "pending-date" : ""} ${!assistant && events.some((s) => state.assignments.some((a) => !a.cancelled && a.sessionId === s.id)) ? "deployed" : ""}`}
                   onClick={() => choose(key)}
                 >
                   <strong>{format(day, "d")}</strong>
@@ -150,7 +199,9 @@ export function Calendar() {
           </div>
           <p className="muted small">
             {assistant
-              ? "Select a date to toggle your availability before submitting. Past dates are read-only."
+              ? submitted && !updatingAvailability
+                ? "Selected dates are pending deployment. Use Update availability to change this month."
+                : "Select a date to toggle your availability before submitting. Past dates are read-only."
               : "Select a date to assign coaches."}
           </p>
         </section>
@@ -161,22 +212,92 @@ export function Calendar() {
               <p className="small muted">
                 Assistant coach · Basketball Academy
               </p>
-              <div className="tint stack">
-                <h3>Select dates available</h3>
-                <p className="small">Submit once for the whole month.</p>
-                <Button
-                  onClick={() =>
-                    commit(
-                      "Availability submitted",
-                      format(month, "MMMM yyyy"),
-                      (s) => {
-                        s.availability[coachId] = available;
-                      },
-                    )
-                  }
-                >
-                  Submit availability
-                </Button>
+              <div
+                className={`tint stack availability-summary ${submitted ? "availability-pending" : ""}`}
+                aria-label={`Availability for ${format(month, "MMMM yyyy")}`}
+              >
+                <p className="small">{format(month, "MMMM yyyy")}</p>
+                {submitted && !updatingAvailability ? (
+                  <>
+                    <h3>Pending</h3>
+                    <p className="small">
+                      Submitted · {pendingDates.length}{" "}
+                      {pendingDates.length === 1 ? "day" : "days"} pending
+                      deployment
+                    </p>
+                    <Button
+                      variant="secondary"
+                      disabled={monthKey < now.slice(0, 7)}
+                      onClick={() => setEditingAvailability(monthKey)}
+                    >
+                      Update availability
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <h3>
+                      {updatingAvailability
+                        ? "Update availability"
+                        : "Select dates available"}
+                    </h3>
+                    <p className="small">Submit once for the whole month.</p>
+                    <Button
+                      disabled={monthKey < now.slice(0, 7)}
+                      onClick={() => {
+                        commit(
+                          "Availability submitted",
+                          format(month, "MMMM yyyy"),
+                          (s) => {
+                            s.availability[coachId] = [
+                              ...(s.availability[coachId] ?? []).filter(
+                                (date) => !date.startsWith(monthKey),
+                              ),
+                              ...available.filter((date) =>
+                                date.startsWith(monthKey),
+                              ),
+                            ];
+                            s.availabilitySubmissions ??= {};
+                            s.availabilitySubmissions[coachId] ??= {};
+                            if (
+                              s.availability[coachId].some((date) =>
+                                date.startsWith(monthKey),
+                              )
+                            ) {
+                              s.availabilitySubmissions[coachId][monthKey] = {
+                                submittedAt: new Date().toISOString(),
+                              };
+                            } else {
+                              delete s.availabilitySubmissions[coachId][
+                                monthKey
+                              ];
+                            }
+                          },
+                        );
+                        setEditingAvailability(null);
+                      }}
+                    >
+                      Submit availability
+                    </Button>
+                    {updatingAvailability && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setAvailable((dates) => [
+                            ...dates.filter(
+                              (date) => !date.startsWith(monthKey),
+                            ),
+                            ...savedDates.filter((date) =>
+                              date.startsWith(monthKey),
+                            ),
+                          ]);
+                          setEditingAvailability(null);
+                        }}
+                      >
+                        Cancel update
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
               <h3>My assigned sessions</h3>
               {state.assignments
@@ -202,6 +323,27 @@ export function Calendar() {
               <Link className="text-link" to="/sessions">
                 View my sessions
               </Link>
+              {submitted && (
+                <>
+                  <h3>My pending sessions</h3>
+                  {pendingSessions.length ? (
+                    pendingSessions.map((s) => (
+                      <div className="mini-session" key={s.id}>
+                        <strong>{s.title}</strong>
+                        <p>
+                          {format(parseISO(s.date), "EEE, d MMM")} · {s.start}–
+                          {s.end}
+                        </p>
+                        <p>{s.venue}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="small muted">
+                      No pending sessions for this month.
+                    </p>
+                  )}
+                </>
+              )}
               <h3>My change requests</h3>
               {state.requests
                 .filter(
@@ -257,7 +399,8 @@ export function Calendar() {
                     <>
                       <h3>Submitted availability · {candidates.length}</h3>
                       <p className="small muted">
-                        Select coaches and their assigned time blocks.
+                        Select coaches and their assigned time blocks. Uncheck
+                        assigned coaches to unassign them when you submit.
                       </p>
                       {candidates.map((c) => {
                         const existing = assigned.some(
@@ -266,35 +409,37 @@ export function Calendar() {
                         return (
                           <div key={c.id} className="assignment-choice">
                             <label className="coach-check">
-                              {existing ? (
-                                <span className="checked-disabled">
-                                  <input
-                                    type="checkbox"
-                                    checked
-                                    disabled
-                                    aria-label={`${c.name} already assigned`}
-                                  />
-                                  <img src="/figma/imgFrame.svg" alt="" />
-                                </span>
-                              ) : (
-                                <input
-                                  type="checkbox"
-                                  checked={picked.includes(c.id)}
-                                  onChange={(e) =>
+                              <input
+                                type="checkbox"
+                                aria-label={c.name}
+                                checked={
+                                  existing
+                                    ? !removed.includes(c.id)
+                                    : picked.includes(c.id)
+                                }
+                                onChange={(e) => {
+                                  if (existing)
+                                    setRemoved(
+                                      e.target.checked
+                                        ? removed.filter((id) => id !== c.id)
+                                        : [...removed, c.id],
+                                    );
+                                  else
                                     setPicked(
                                       e.target.checked
                                         ? [...picked, c.id]
                                         : picked.filter((id) => id !== c.id),
-                                    )
-                                  }
-                                />
-                              )}
+                                    );
+                                }}
+                              />
                               <span>{c.name}</span>
                               <small
                                 className={existing ? "success-text" : "muted"}
                               >
                                 {existing
-                                  ? "Already assigned"
+                                  ? removed.includes(c.id)
+                                    ? "Will be unassigned"
+                                    : "Assigned"
                                   : picked.includes(c.id)
                                     ? "Selected"
                                     : "Not assigned"}
@@ -334,12 +479,29 @@ export function Calendar() {
                       })}
                       <Button
                         disabled={
-                          !picked.length ||
+                          (!picked.length && !removed.length) ||
                           picked.some((c) => newAssignments[c]?.length === 0) ||
-                          assigned.length + picked.length > session.needed
+                          assigned.length - removed.length + picked.length >
+                            session.needed
                         }
                         onClick={() => {
                           commit("Assignments updated", session.title, (s) => {
+                            for (const assignment of s.assignments) {
+                              if (
+                                !assignment.cancelled &&
+                                assignment.sessionId === session.id &&
+                                removed.includes(assignment.coachId)
+                              ) {
+                                assignment.cancelled = true;
+                                for (const request of s.requests) {
+                                  if (
+                                    request.assignmentId === assignment.id &&
+                                    request.status === "Pending"
+                                  )
+                                    request.status = "Approved";
+                                }
+                              }
+                            }
                             for (const id of picked)
                               s.assignments.push({
                                 id: `ATT-${crypto.randomUUID().slice(0, 8)}`,
@@ -377,10 +539,14 @@ export function Calendar() {
                       <ol className="coach-list">
                         {assigned.map((a) => (
                           <li key={a.id}>
-                            {
-                              state.coaches.find((c) => c.id === a.coachId)
-                                ?.name
-                            }
+                            <div className="assigned-coach-row">
+                              <span>
+                                {
+                                  state.coaches.find((c) => c.id === a.coachId)
+                                    ?.name
+                                }
+                              </span>
+                            </div>
                           </li>
                         ))}
                       </ol>
@@ -389,7 +555,14 @@ export function Calendar() {
                       )}
                       {head && (
                         <>
-                          <Button onClick={() => setEditing(true)}>
+                          <Button
+                            onClick={() => {
+                              setRemoved([]);
+                              setPicked([]);
+                              setNewAssignments({});
+                              setEditing(true);
+                            }}
+                          >
                             Update assignments
                           </Button>
                           <Link
@@ -487,7 +660,10 @@ export function Sessions() {
   const visible = mine.filter((s) =>
     tab === "Cancelled"
       ? state.assignments.some(
-          (a) => a.sessionId === s.id && a.coachId === coachId && a.cancelled,
+          (a) =>
+            a.sessionId === s.id &&
+            (role === "Head Coach" || a.coachId === coachId) &&
+            a.cancelled,
         )
       : state.assignments.some(
           (a) =>
@@ -638,10 +814,24 @@ export function Sessions() {
           <p>
             Assigned coaches:{" "}
             {state.assignments
-              .filter((a) => a.sessionId === detail.id)
+              .filter((a) => a.sessionId === detail.id && !a.cancelled)
               .map((a) => state.coaches.find((c) => c.id === a.coachId)?.name)
               .join(", ") || "None"}
           </p>
+          {state.assignments.some(
+            (a) => a.sessionId === detail.id && a.cancelled,
+          ) && (
+            <p>
+              Cancelled assignments:{" "}
+              {state.assignments
+                .filter((a) => a.sessionId === detail.id && a.cancelled)
+                .map(
+                  (a) =>
+                    `${state.coaches.find((c) => c.id === a.coachId)?.name} (${slotText(a.slots)})`,
+                )
+                .join(", ")}
+            </p>
+          )}
         </Modal>
       )}
     </>
