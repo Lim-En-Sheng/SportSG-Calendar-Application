@@ -17,6 +17,9 @@ A coaching operations web application that brings programme scheduling, coach as
 > **Project status — Functional local prototype**  
 > The screens and workflows run locally with browser-saved data. Live authentication, a shared database, and connected spreadsheet accounts are not yet implemented.
 
+## OpenAI site hosted app
+Access the demo web application here, do note that data added on the application is kept locally
+https://sports-sg-coach-calendar.tiffanylamxy.chatgpt.site/
 ## ✨ What you can do
 
 Coach Calendar supports three roles, each with a distinct part in planning and verifying coaching work.
