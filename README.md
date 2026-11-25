@@ -18,8 +18,10 @@ A coaching operations web application that brings programme scheduling, coach as
 > The screens and workflows run locally with browser-saved data. Live authentication, a shared database, and connected spreadsheet accounts are not yet implemented.
 
 ## OpenAI site hosted app
+
 Access the demo web application here, do note that data added on the application is kept locally
 https://sports-sg-coach-calendar.tiffanylamxy.chatgpt.site/
+
 ## ✨ What you can do
 
 Coach Calendar supports three roles, each with a distinct part in planning and verifying coaching work.
@@ -38,7 +40,8 @@ Coach Calendar supports three roles, each with a distinct part in planning and v
 - Past dates appear grey. Assistant Coaches cannot select them; Head Coaches and Admin can view historical sessions.
 - Availability is saved separately for each Assistant Coach and month, including after a refresh.
 - Assigned, completed, and cancelled session views.
-- Change requests that stay pending until the Head Coach approves or rejects them.
+- Change requests open with the assigned hourly slots preselected and an editable reason. Submitted requests turn the programme date red. The Assistant Coach sidebar shows programme, date, and status; click an entry to view the reason and requested slots.
+- Head Coaches open a request to compare original and requested slots side by side, then approve or reject it. Approval updates the existing deployment to the requested hours, returning it to **My assigned sessions** with a green date. Rejection preserves the original assignment. Resolved requests disappear from the Assistant Coach list while remaining saved in history. A request to remove all hours cancels the deployment.
 - Responsive layouts: desktop calendar cells show programme names; mobile cells show session counts with full details below.
 
 ### Monthly availability
@@ -50,11 +53,12 @@ Coach Calendar supports three roles, each with a distinct part in planning and v
 | **Green**   | Head Coach has confirmed deployment                  |
 | **Grey**    | Past date; disabled for Assistant Coach selection    |
 
-- Click today or a future date to select it, then **Submit availability** for that month.
+- Assistant Coaches can select only today or future dates with scheduled programmes. Clicking a date opens hourly time-slot checkboxes for each programme, including the final partial hour. Use **Tick all** or select individual slots, then **Save time slots** and **Submit availability** for that month.
 - Submitted months show a yellow **Pending** summary. Status persists separately for each coach and month.
-- Use **Update availability** to revise dates. Clicking a yellow date turns it white; submit to save or **Cancel update** to discard edits.
+- Use **Update availability** to revise slots. Clear all slots on a date to turn it white; submit to save or **Cancel update** to discard edits. Head Coach deployment choices respect the hours submitted.
 - Submitting **0 days** returns to **Select dates available**, without Pending status.
-- Other months remain unchanged. Past-date greying takes precedence over selection colours.
+- After Head Coach deployment, that month shows a green **Programmes assigned** summary and **Update availability** is disabled. Other months remain unchanged. Past-date greying takes precedence over selection colours.
+- For Assistant Coaches, double-click a programme date or click a programme name in the calendar or right-hand panel to open the matching entries in **My sessions**. Use **Show all my sessions** to clear the filter. The **Coaches** tab is hidden for Assistant Coaches. **Programmes** remains grouped by date.
 
 ### 👥 Coach assignments
 
@@ -100,13 +104,17 @@ Coach Calendar supports three roles, each with a distinct part in planning and v
 
 ### 🏟️ Programme management
 
-Admins can create programmes with a live preview and the following details:
+Admins add and edit programmes directly from **Programmes**; there is no separate Manage programmes page. Click **Add programme** to open the form, or **Edit** at the far right of an existing row. The form includes a live preview and the following details:
 
 | Programme information                   | Scheduling information   |
 | :-------------------------------------- | :----------------------- |
 | Name and location                       | Session date             |
 | Participant capacity                    | Start and end time       |
 | Beginner, Intermediate, or Expert level | Number of coaches needed |
+
+Programme names and locations accept free text and offer dropdown suggestions from existing programme records, including past sessions. Use **Add another date** to create multiple sessions with the same details and times; duplicate dates are rejected.
+
+Each row can be edited independently. Sessions with assignment history retain their date and time, and the required coach count cannot be reduced below the current number assigned. **Cancel** discards form changes.
 
 The programme list and coach directory are searchable.
 

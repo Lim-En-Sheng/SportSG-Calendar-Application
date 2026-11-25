@@ -92,8 +92,10 @@ test("hourly attendance saves and partial-hour cover keeps exact worked slots", 
   page,
 }) => {
   await page.goto("/attendance/s19");
+  // New blocks with 15-min breaks: 09:00-10:00, 10:15-11:15, 11:30-12:00
+  // Ryan Coo is assigned to 10:15-12:00 which covers blocks 10:15-11:15 and 11:30-12:00
   await page
-    .getByRole("button", { name: "Ryan Coo 11:00-12:00 Present", exact: true })
+    .getByRole("button", { name: "Ryan Coo 10:15-11:15 Present", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Save attendance", exact: true })
@@ -101,7 +103,7 @@ test("hourly attendance saves and partial-hour cover keeps exact worked slots", 
   await page.reload();
   await expect(
     page.getByRole("button", {
-      name: "Ryan Coo 11:00-12:00 Present",
+      name: "Ryan Coo 10:15-11:15 Present",
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -110,7 +112,7 @@ test("hourly attendance saves and partial-hour cover keeps exact worked slots", 
     .getByRole("combobox", { name: "Coach", exact: true })
     .selectOption("c4");
   await page.getByLabel("Start time", { exact: true }).fill("09:30");
-  await page.getByLabel("End time", { exact: true }).fill("10:15");
+  await page.getByLabel("End time", { exact: true }).fill("10:30");
   await page.getByRole("button", { name: "Add coach & worked slot" }).click();
   await expect(
     page.getByRole("button", {
@@ -120,7 +122,7 @@ test("hourly attendance saves and partial-hour cover keeps exact worked slots", 
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", {
-      name: "Aisyah Rahman 10:00-10:15 Present",
+      name: "Aisyah Rahman 10:15-10:30 Present",
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -221,8 +223,9 @@ test("Admin creates a programme and report filters have empty states", async ({
     .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
     .click();
   await role(page, "Admin");
+  await page.getByRole("link", { name: "Programmes", exact: true }).click();
   await page
-    .getByRole("link", { name: "Manage programmes", exact: true })
+    .getByRole("button", { name: "Add programme", exact: true })
     .click();
   await page
     .getByLabel("Programme name *", { exact: true })
@@ -285,6 +288,7 @@ test("approved changes remain in cancelled history and role survives refresh", a
   await page
     .getByRole("button", { name: "Saturday, 19 September 2026", exact: true })
     .click();
+  await page.getByRole("button", { name: "Review change request" }).click();
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await role(page, "Assistant Coach");
   await page.getByRole("link", { name: "My sessions", exact: true }).click();

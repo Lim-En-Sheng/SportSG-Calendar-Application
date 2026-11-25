@@ -47,6 +47,8 @@ export type Resolution = {
   fingerprint: string;
 };
 export type ChangeRequest = {
+  originalSlots?: Slot[];
+  requestedSlots?: Slot[];
   id: string;
   assignmentId: string;
   reason: string;
@@ -65,6 +67,7 @@ export type State = {
   coaches: Coach[];
   assignments: Assignment[];
   availability: Record<string, string[]>;
+  availabilitySlots?: Record<string, Record<string, string[]>>;
   availabilitySubmissions?: Record<
     string,
     Record<string, { submittedAt: string }>
@@ -145,11 +148,21 @@ export function validateSlots(
 }
 export function blocks(session: Pick<Session, "start" | "end">): Slot[] {
   const result = [];
-  for (let m = minutes(session.start); m < minutes(session.end); m += 60)
+  const sessionStart = minutes(session.start);
+  const sessionEnd = minutes(session.end);
+  let blockStart = sessionStart;
+  let blockIndex = 0;
+
+  while (blockStart < sessionEnd) {
+    const blockEnd = Math.min(blockStart + 60, sessionEnd);
     result.push({
-      start: time(m),
-      end: time(Math.min(m + 60, minutes(session.end))),
+      start: time(blockStart),
+      end: time(blockEnd),
     });
+    blockIndex++;
+    // Next block starts after 1 hour + 15 min break
+    blockStart = sessionStart + blockIndex * 75;
+  }
   return result;
 }
 export function assignmentBlocks(a: Assignment, s: Session): Slot[] {

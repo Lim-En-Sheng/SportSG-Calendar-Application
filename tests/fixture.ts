@@ -32,9 +32,9 @@ export function seed(): State {
         s.id === "s26"
           ? [{ start: "11:00", end: "12:30" }]
           : c.id === "c1"
-            ? [{ start: "09:00", end: "11:00" }]
+            ? [{ start: "09:00", end: "11:15" }] // covers 09:00-10:00 and 10:15-11:15
             : c.id === "c2"
-              ? [{ start: "10:00", end: s.id === "s12" ? "11:00" : "12:00" }]
+              ? [{ start: "10:15", end: s.id === "s12" ? "11:15" : "12:00" }] // covers 10:15-11:15 and 11:30-12:00
               : [{ start: "09:00", end: "10:00" }];
       const a = {
         id: `ATT-${String(assignments.length + 1).padStart(4, "0")}`,
@@ -44,11 +44,12 @@ export function seed(): State {
       };
       assignments.push(a);
       if (s.id !== "s26") {
+        const ab = assignmentBlocks(a, s);
         attendance[a.id] = {
           marks: Object.fromEntries(
-            assignmentBlocks(a, s).map((b) => [
+            ab.map((b) => [
               slotKey(b),
-              s.id === "s19" && c.id === "c2" && b.start === "11:00"
+              s.id === "s19" && c.id === "c2" && b.start === "11:30"
                 ? "Absent"
                 : "Present",
             ]),
@@ -56,11 +57,12 @@ export function seed(): State {
           savedAt: "2026-09-19T12:05:00+08:00",
           notes: "",
         };
+        // Draft slots match assignment blocks (split at 15-min breaks) for verified coaches
+        const verified = !(s.id === "s19" && c.id === "c2");
         drafts[a.id] = {
-          slots,
+          slots: verified ? ab : slots,
           explanation: "",
-          verifiedAt:
-            s.id === "s19" && c.id === "c2" ? "" : "2026-09-20T10:15:00+08:00",
+          verifiedAt: verified ? "2026-09-20T10:15:00+08:00" : "",
         };
       }
     }

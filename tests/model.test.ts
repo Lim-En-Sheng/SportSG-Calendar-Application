@@ -51,13 +51,13 @@ test("partial cover is split exactly at session hour boundaries", () => {
       id: "cover",
       coachId: "c4",
       sessionId: session.id,
-      slots: [{ start: "09:30", end: "10:15" }],
+      slots: [{ start: "09:30", end: "10:30" }],
     },
     session,
   );
   assert.deepEqual(parts, [
     { start: "09:30", end: "10:00" },
-    { start: "10:00", end: "10:15" },
+    { start: "10:15", end: "10:30" },
   ]);
   assert.equal(hours(parts), 0.75);
 });
@@ -112,7 +112,7 @@ test("source revisions invalidate previous admin resolution and verification", (
   let rows = reportRows(s).filter((r) => r.date < "2026-09-20"),
     r = rows.find((r) => r.id === a.id)!;
   s.resolutions[a.id] = {
-    slots: [{ start: "10:00", end: "11:00" }],
+    slots: [{ start: "10:15", end: "11:15" }],
     reason: "Confirmed with coach",
     at: "2026-09-20",
     by: "Admin",
@@ -124,7 +124,7 @@ test("source revisions invalidate previous admin resolution and verification", (
     at: "2026-09-20",
   };
   assert.equal(isFinalised(s, "2026-09", rows), true);
-  s.attendance[a.id].marks["11:00-12:00"] = "Present";
+  s.attendance[a.id].marks["11:30-12:00"] = "Present";
   rows = reportRows(s).filter((r) => r.date < "2026-09-20");
   assert.equal(rows.find((r) => r.id === a.id)!.resolved, undefined);
   assert.equal(isFinalised(s, "2026-09", rows), false);

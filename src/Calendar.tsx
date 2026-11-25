@@ -10,14 +10,27 @@ import {
   startOfMonth,
   startOfWeek,
 } from "date-fns";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Badge, Button, Heading, Modal, SessionInfo } from "./components";
 import { useStore } from "./store";
-import { blocks, slotText } from "./model";
-import type { Session } from "./model";
+import { blocks, slotText, assignmentBlocks } from "./model";
+import type { Session, Slot } from "./model";
 
 export function Calendar() {
   const { state, role, coachId, commit, now } = useStore();
+  const navigate = useNavigate();
+  const [viewRequest, setViewRequest] = useState<string | null>(null);
+  const requestForDate = (date: string, status: string) =>
+    state.requests.some(
+      (r) =>
+        r.status === status &&
+        state.assignments.some(
+          (a) =>
+            a.id === r.assignmentId &&
+            a.coachId === coachId &&
+            state.sessions.some((s) => s.id === a.sessionId && s.date === date),
+        ),
+    );
   const [month, setMonth] = useState(() =>
     startOfMonth(parseISO(now.slice(0, 10))),
   );
@@ -29,6 +42,10 @@ export function Calendar() {
   const [available, setAvailable] = useState(state.availability[coachId] ?? []);
   const [editingAvailability, setEditingAvailability] = useState<string | null>(
     null,
+  );
+  const [slotDate, setSlotDate] = useState<string | null>(null);
+  const [slotChoices, setSlotChoices] = useState<Record<string, string[]>>(
+    state.availabilitySlots?.[coachId] ?? {},
   );
   const monthKey = format(month, "yyyy-MM");
   const submitted =
@@ -45,6 +62,14 @@ export function Calendar() {
         a.coachId === coachId &&
         state.sessions.some((s) => s.id === a.sessionId && s.date === date),
     );
+  const monthAssigned = state.assignments.some(
+    (a) =>
+      !a.cancelled &&
+      a.coachId === coachId &&
+      state.sessions.some(
+        (s) => s.id === a.sessionId && s.date.startsWith(monthKey),
+      ),
+  );
   const pendingDates = savedDates.filter(
     (date) => date.startsWith(monthKey) && !hasAssignment(date),
   );
@@ -53,6 +78,7 @@ export function Calendar() {
         (s) =>
           s.date.startsWith(monthKey) &&
           savedDates.includes(s.date) &&
+          (state.availabilitySlots?.[coachId]?.[s.id]?.length ?? 1) > 0 &&
           !state.assignments.some(
             (a) =>
               !a.cancelled && a.sessionId === s.id && a.coachId === coachId,
@@ -73,7 +99,8 @@ export function Calendar() {
   );
   const candidates = state.coaches.filter(
     (c) =>
-      state.availability[c.id]?.includes(selected) ||
+      (state.availability[c.id]?.includes(selected) &&
+        (state.availabilitySlots?.[c.id]?.[session?.id]?.length ?? 1) > 0) ||
       assigned.some((a) => a.coachId === c.id),
   );
   const assistant = role === "Assistant Coach";
@@ -86,13 +113,13 @@ export function Calendar() {
     setPicked([]);
     if (
       assistant &&
+      !monthAssigned &&
       date.startsWith(monthKey) &&
       date >= now.slice(0, 10) &&
-      (!submitted || updatingAvailability)
+      (!submitted || updatingAvailability) &&
+      state.sessions.some((s) => s.date === date)
     )
-      setAvailable((v) =>
-        v.includes(date) ? v.filter((d) => d !== date) : [...v, date],
-      );
+      setSlotDate(date);
   }
   return (
     <>
@@ -151,37 +178,54 @@ export function Calendar() {
               const key = format(day, "yyyy-MM-dd"),
                 events = state.sessions.filter((s) => s.date === key);
               return (
-                <button
-                  type="button"
-                  key={key}
-                  aria-label={format(day, "EEEE, d MMMM yyyy")}
-                  aria-description={[
-                    key < now.slice(0, 10) ? "Past date" : "",
-                    events.map((s) => s.title).join("; ") || "No programme",
-                  ]
-                    .filter(Boolean)
-                    .join(". ")}
-                  disabled={assistant && key < now.slice(0, 10)}
-                  aria-pressed={
-                    assistant
-                      ? available.includes(key) || hasAssignment(key)
-                      : selected === key
-                  }
-                  className={`day ${key < now.slice(0, 10) ? "past" : ""} ${!isSameMonth(day, month) ? "outside" : ""} ${!assistant && selected === key ? "selected" : ""} ${assistant && hasAssignment(key) ? "assigned-date" : assistant && available.includes(key) ? "pending-date" : ""} ${!assistant && events.some((s) => state.assignments.some((a) => !a.cancelled && a.sessionId === s.id)) ? "deployed" : ""}`}
-                  onClick={() => choose(key)}
-                >
-                  <strong>{format(day, "d")}</strong>
-                  {events.map((s) => (
-                    <span className="day-event" key={s.id}>
-                      {s.title}
-                    </span>
-                  ))}
-                  {events.length > 0 && (
-                    <span className="day-mobile">
-                      {events.length} session{events.length > 1 ? "s" : ""}
-                    </span>
-                  )}
-                </button>
+                <div className="calendar-cell" key={key}>
+                  <button
+                    type="button"
+                    key={key}
+                    aria-label={format(day, "EEEE, d MMMM yyyy")}
+                    aria-description={[
+                      key < now.slice(0, 10) ? "Past date" : "",
+                      events.map((s) => s.title).join("; ") || "No programme",
+                    ]
+                      .filter(Boolean)
+                      .join(". ")}
+                    disabled={
+                      assistant && (key < now.slice(0, 10) || !events.length)
+                    }
+                    aria-pressed={
+                      assistant
+                        ? available.includes(key) || hasAssignment(key)
+                        : selected === key
+                    }
+                    className={`day ${key < now.slice(0, 10) ? "past" : ""} ${!isSameMonth(day, month) ? "outside" : ""} ${!assistant && selected === key ? "selected" : ""} ${assistant && requestForDate(key, "Pending") ? "change-pending-date" : assistant && hasAssignment(key) ? "assigned-date" : assistant && available.includes(key) && !requestForDate(key, "Approved") ? "pending-date" : ""} ${!assistant && events.some((s) => state.assignments.some((a) => !a.cancelled && a.sessionId === s.id)) ? "deployed" : ""}`}
+                    onDoubleClick={() => {
+                      if (events.length)
+                        navigate(
+                          `${assistant ? "/sessions" : "/programmes"}?date=${key}`,
+                        );
+                    }}
+                    onClick={() => choose(key)}
+                  >
+                    <strong>{format(day, "d")}</strong>
+                    {events.length > 0 && (
+                      <span className="day-mobile">
+                        {events.length} session{events.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </button>
+                  <div className="calendar-event-links">
+                    {events.map((s) => (
+                      <Link
+                        className="day-event"
+                        key={s.id}
+                        to={`${assistant ? "/sessions" : "/programmes"}?date=${key}&session=${encodeURIComponent(s.id)}`}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        {s.title}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -199,9 +243,11 @@ export function Calendar() {
           </div>
           <p className="muted small">
             {assistant
-              ? submitted && !updatingAvailability
-                ? "Selected dates are pending deployment. Use Update availability to change this month."
-                : "Select a date to toggle your availability before submitting. Past dates are read-only."
+              ? monthAssigned
+                ? "Programmes assigned. Double-click a programme date or click its name to view details."
+                : submitted && !updatingAvailability
+                  ? "Selected dates are pending deployment. Use Update availability to change this month."
+                  : "Select a date to toggle your availability before submitting. Past dates are read-only."
               : "Select a date to assign coaches."}
           </p>
         </section>
@@ -213,11 +259,18 @@ export function Calendar() {
                 Assistant coach · Basketball Academy
               </p>
               <div
-                className={`tint stack availability-summary ${submitted ? "availability-pending" : ""}`}
+                className={`tint stack availability-summary ${monthAssigned ? "availability-assigned" : submitted ? "availability-pending" : ""}`}
                 aria-label={`Availability for ${format(month, "MMMM yyyy")}`}
               >
                 <p className="small">{format(month, "MMMM yyyy")}</p>
-                {submitted && !updatingAvailability ? (
+                {monthAssigned ? (
+                  <>
+                    <h3>Programmes assigned</h3>
+                    <Button variant="secondary" disabled>
+                      Update availability
+                    </Button>
+                  </>
+                ) : submitted && !updatingAvailability ? (
                   <>
                     <h3>Pending</h3>
                     <p className="small">
@@ -256,6 +309,17 @@ export function Calendar() {
                                 date.startsWith(monthKey),
                               ),
                             ];
+                            s.availabilitySlots ??= {};
+                            s.availabilitySlots[coachId] ??= {};
+                            for (const programme of s.sessions.filter((entry) =>
+                              entry.date.startsWith(monthKey),
+                            )) {
+                              s.availabilitySlots[coachId][programme.id] =
+                                available.includes(programme.date)
+                                  ? (slotChoices[programme.id] ??
+                                    blocks(programme).map((b) => b.start))
+                                  : [];
+                            }
                             s.availabilitySubmissions ??= {};
                             s.availabilitySubmissions[coachId] ??= {};
                             if (
@@ -290,6 +354,18 @@ export function Calendar() {
                               date.startsWith(monthKey),
                             ),
                           ]);
+                          setSlotChoices((choices) => {
+                            const restored = { ...choices };
+                            for (const s of state.sessions.filter((s) =>
+                              s.date.startsWith(monthKey),
+                            )) {
+                              delete restored[s.id];
+                              if (state.availabilitySlots?.[coachId]?.[s.id])
+                                restored[s.id] =
+                                  state.availabilitySlots[coachId][s.id];
+                            }
+                            return restored;
+                          });
                           setEditingAvailability(null);
                         }}
                       >
@@ -311,9 +387,12 @@ export function Calendar() {
                 )
                 .map((a) => (
                   <div className="mini-session" key={a.id}>
-                    <strong>
+                    <Link
+                      className="text-link"
+                      to={`/sessions?session=${encodeURIComponent(a.sessionId)}`}
+                    >
                       {state.sessions.find((s) => s.id === a.sessionId)!.title}
-                    </strong>
+                    </Link>
                     <p>
                       {state.sessions.find((s) => s.id === a.sessionId)!.date} ·{" "}
                       {slotText(a.slots)}
@@ -329,7 +408,12 @@ export function Calendar() {
                   {pendingSessions.length ? (
                     pendingSessions.map((s) => (
                       <div className="mini-session" key={s.id}>
-                        <strong>{s.title}</strong>
+                        <Link
+                          className="text-link"
+                          to={`/sessions?session=${encodeURIComponent(s.id)}`}
+                        >
+                          {s.title}
+                        </Link>
                         <p>
                           {format(parseISO(s.date), "EEE, d MMM")} · {s.start}–
                           {s.end}
@@ -348,14 +432,34 @@ export function Calendar() {
               {state.requests
                 .filter(
                   (r) =>
+                    r.status === "Pending" &&
                     state.assignments.find((a) => a.id === r.assignmentId)
                       ?.coachId === coachId,
                 )
-                .map((r) => (
-                  <p key={r.id}>
-                    {r.reason} · <Badge>{r.status}</Badge>
-                  </p>
-                ))}
+                .map((r) => {
+                  const a = state.assignments.find(
+                    (a) => a.id === r.assignmentId,
+                  );
+                  const programme = state.sessions.find(
+                    (s) => s.id === a?.sessionId,
+                  );
+                  return programme ? (
+                    <div className="mini-session" key={r.id}>
+                      <Button
+                        variant="link"
+                        className="request-title"
+                        onClick={() => setViewRequest(r.id)}
+                      >
+                        {programme.title}
+                      </Button>
+                      <p>
+                        {programme.date} ?{" "}
+                        {slotText(r.requestedSlots ?? a?.slots)}
+                      </p>
+                      <Badge>Pending</Badge>
+                    </div>
+                  ) : null;
+                })}
             </>
           ) : (
             <>
@@ -451,13 +555,27 @@ export function Calendar() {
                                   <label className="check-line" key={b.start}>
                                     <input
                                       type="checkbox"
+                                      disabled={
+                                        state.availabilitySlots?.[c.id]?.[
+                                          session.id
+                                        ] !== undefined &&
+                                        !state.availabilitySlots[c.id][
+                                          session.id
+                                        ].includes(b.start)
+                                      }
                                       checked={(
                                         newAssignments[c.id] ??
+                                        state.availabilitySlots?.[c.id]?.[
+                                          session.id
+                                        ] ??
                                         blocks(session).map((x) => x.start)
                                       ).includes(b.start)}
                                       onChange={(e) => {
                                         const previous =
                                           newAssignments[c.id] ??
+                                          state.availabilitySlots?.[c.id]?.[
+                                            session.id
+                                          ] ??
                                           blocks(session).map((x) => x.start);
                                         setNewAssignments({
                                           ...newAssignments,
@@ -510,6 +628,9 @@ export function Calendar() {
                                 slots: blocks(session).filter((b) =>
                                   (
                                     newAssignments[id] ??
+                                    state.availabilitySlots?.[id]?.[
+                                      session.id
+                                    ] ??
                                     blocks(session).map((x) => x.start)
                                   ).includes(b.start),
                                 ),
@@ -587,95 +708,184 @@ export function Calendar() {
         </aside>
       </div>
       {head && <ChangeQueue />}
+      {viewRequest && (
+        <RequestReview
+          requestId={viewRequest}
+          onClose={() => setViewRequest(null)}
+        />
+      )}
+      {slotDate && (
+        <AvailabilitySlots
+          date={slotDate}
+          sessions={state.sessions.filter((s) => s.date === slotDate)}
+          value={slotChoices}
+          available={available.includes(slotDate)}
+          onClose={() => setSlotDate(null)}
+          onSave={(choices) => {
+            setSlotChoices({ ...slotChoices, ...choices });
+            const any = Object.values(choices).some((slots) => slots.length);
+            setAvailable((dates) =>
+              any
+                ? [...new Set([...dates, slotDate])]
+                : dates.filter((d) => d !== slotDate),
+            );
+            setSlotDate(null);
+          }}
+        />
+      )}
     </>
   );
 }
 
 function ChangeQueue() {
-  const { state, commit } = useStore();
+  const { state } = useStore();
+  const [review, setReview] = useState<string | null>(null);
   const pending = state.requests.filter((r) => r.status === "Pending");
   return (
     <section className="card requests">
       <h2>Change requests · {pending.length} pending</h2>
-      {pending.length === 0 && (
-        <p className="small muted">No change requests.</p>
-      )}
+      {!pending.length && <p className="small muted">No change requests.</p>}
       {pending.map((r) => {
         const a = state.assignments.find((a) => a.id === r.assignmentId);
-        const s = state.sessions.find((s) => s.id === a?.sessionId);
-        if (!a || !s) return null;
-        return (
+        const session = state.sessions.find((s) => s.id === a?.sessionId);
+        return a && session ? (
           <div className="request-row" key={r.id}>
-            <div>
-              <strong>
-                {state.coaches.find((c) => c.id === a.coachId)?.name} ·{" "}
-                {format(parseISO(s.date), "EEE, d MMMM")} · {s.title}
-              </strong>
-              <p className="small muted">{r.reason}</p>
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() =>
-                commit("Change request rejected", r.reason, (state) => {
-                  state.requests.find((x) => x.id === r.id)!.status =
-                    "Rejected";
-                })
-              }
-            >
-              Reject
-            </Button>
-            <Button
-              onClick={() =>
-                commit("Change request approved", r.reason, (state) => {
-                  state.requests.find((x) => x.id === r.id)!.status =
-                    "Approved";
-                  state.assignments.find((x) => x.id === a.id)!.cancelled =
-                    true;
-                })
-              }
-            >
-              Approve
+            <strong>
+              {state.coaches.find((c) => c.id === a.coachId)?.name} ·{" "}
+              {session.title} · {session.date}
+            </strong>
+            <Button onClick={() => setReview(r.id)}>
+              Review change request
             </Button>
           </div>
-        );
+        ) : null;
       })}
+      {review && (
+        <RequestReview requestId={review} onClose={() => setReview(null)} />
+      )}
     </section>
+  );
+}
+
+function RequestReview({
+  requestId,
+  onClose,
+}: {
+  requestId: string;
+  onClose: () => void;
+}) {
+  const { state, role, commit } = useStore();
+  const request = state.requests.find((r) => r.id === requestId)!;
+  const assignment = state.assignments.find(
+    (a) => a.id === request.assignmentId,
+  )!;
+  const session = state.sessions.find((s) => s.id === assignment.sessionId)!;
+  return (
+    <Modal title="Change request details" onClose={onClose}>
+      <SessionInfo session={session} />
+      <div className="two-col">
+        <section className="card stack">
+          <h3>Original time slots</h3>
+          <p>{slotText(request.originalSlots ?? assignment.slots)}</p>
+        </section>
+        <section className="card stack">
+          <h3>Requested time slots</h3>
+          <p>{slotText(request.requestedSlots ?? [])}</p>
+        </section>
+      </div>
+      <h3>Reason for change</h3>
+      <p>{request.reason}</p>
+      <Badge>{request.status}</Badge>
+      {role === "Head Coach" && request.status === "Pending" && (
+        <div className="actions">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              commit("Change request rejected", request.reason, (s) => {
+                s.requests.find((r) => r.id === requestId)!.status = "Rejected";
+              });
+              onClose();
+            }}
+          >
+            Reject
+          </Button>
+          <Button
+            onClick={() => {
+              commit("Change request approved", request.reason, (s) => {
+                s.requests.find((r) => r.id === requestId)!.status = "Approved";
+                const updated = s.assignments.find(
+                  (a) => a.id === assignment.id,
+                )!;
+                const slots = structuredClone(request.requestedSlots ?? []);
+                updated.slots = slots;
+                updated.cancelled = slots.length === 0;
+                s.availabilitySlots ??= {};
+                s.availabilitySlots[assignment.coachId] ??= {};
+                s.availabilitySlots[assignment.coachId][session.id] = (
+                  request.requestedSlots ?? assignment.slots
+                ).map((b) => b.start);
+              });
+              onClose();
+            }}
+          >
+            Approve
+          </Button>
+        </div>
+      )}
+    </Modal>
   );
 }
 
 export function Sessions() {
   const { state, role, coachId, now, commit } = useStore();
+  const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState("Assigned/Pending");
+  const linkedDate = params.get("date"),
+    linkedSession = params.get("session");
+  const isPending = (s: Session) =>
+    !!state.availabilitySubmissions?.[coachId]?.[s.date.slice(0, 7)] &&
+    !!state.availability[coachId]?.includes(s.date) &&
+    (state.availabilitySlots?.[coachId]?.[s.id]?.length ?? 1) > 0;
   const [request, setRequest] = useState<string | null>(null);
   const [detail, setDetail] = useState<Session | null>(null);
   const [reason, setReason] = useState("");
+  const [requestedSlots, setRequestedSlots] = useState<Slot[]>([]);
+  const requestAssignment = state.assignments.find((a) => a.id === request);
+  const requestSession = state.sessions.find(
+    (s) => s.id === requestAssignment?.sessionId,
+  );
   const mine =
     role === "Head Coach"
       ? state.sessions
-      : state.sessions.filter((s) =>
-          state.assignments.some(
-            (a) => a.sessionId === s.id && a.coachId === coachId,
-          ),
+      : state.sessions.filter(
+          (s) =>
+            state.assignments.some(
+              (a) => a.sessionId === s.id && a.coachId === coachId,
+            ) || isPending(s),
         );
   const visible = mine.filter((s) =>
-    tab === "Cancelled"
-      ? state.assignments.some(
-          (a) =>
-            a.sessionId === s.id &&
-            (role === "Head Coach" || a.coachId === coachId) &&
-            a.cancelled,
-        )
-      : state.assignments.some(
-          (a) =>
-            a.sessionId === s.id &&
-            !a.cancelled &&
-            (role === "Head Coach" || a.coachId === coachId),
-        ) &&
-        (tab === "Completed"
-          ? `${s.date}T${s.end}` <= now
-          : tab === "Assigned/Pending"
-            ? `${s.date}T${s.end}` > now
-            : false),
+    linkedDate || linkedSession
+      ? (!linkedDate || s.date === linkedDate) &&
+        (!linkedSession || s.id === linkedSession)
+      : tab === "Cancelled"
+        ? state.assignments.some(
+            (a) =>
+              a.sessionId === s.id &&
+              (role === "Head Coach" || a.coachId === coachId) &&
+              a.cancelled,
+          )
+        : (state.assignments.some(
+            (a) =>
+              a.sessionId === s.id &&
+              !a.cancelled &&
+              (role === "Head Coach" || a.coachId === coachId),
+          ) ||
+            (role === "Assistant Coach" && isPending(s))) &&
+          (tab === "Completed"
+            ? `${s.date}T${s.end}` <= now
+            : tab === "Assigned/Pending"
+              ? `${s.date}T${s.end}` > now
+              : false),
   );
   return (
     <>
@@ -688,12 +898,20 @@ export function Sessions() {
           Verify worked hours
         </Link>
       )}
+      {(linkedDate || linkedSession) && (
+        <Button variant="secondary" onClick={() => setParams({})}>
+          Show all my sessions
+        </Button>
+      )}
       <div className="tabs">
         {["Assigned/Pending", "Completed", "Cancelled"].map((t) => (
           <Button
             variant={tab === t ? "primary" : "secondary"}
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              setParams({});
+              setTab(t);
+            }}
           >
             {t}
           </Button>
@@ -726,35 +944,52 @@ export function Sessions() {
               </Link>
             ) : (
               <>
-                {tab === "Assigned/Pending" && (
-                  <Button
-                    variant="secondary"
-                    disabled={state.requests.some(
-                      (r) =>
-                        r.status === "Pending" &&
-                        r.assignmentId ===
+                {tab === "Assigned/Pending" &&
+                  state.assignments.some(
+                    (a) =>
+                      !a.cancelled &&
+                      a.sessionId === s.id &&
+                      a.coachId === coachId,
+                  ) && (
+                    <Button
+                      variant="secondary"
+                      disabled={state.requests.some(
+                        (r) =>
+                          r.status === "Pending" &&
+                          r.assignmentId ===
+                            state.assignments.find(
+                              (a) =>
+                                !a.cancelled &&
+                                a.sessionId === s.id &&
+                                a.coachId === coachId,
+                            )?.id,
+                      )}
+                      onClick={() => {
+                        setRequest(
                           state.assignments.find(
                             (a) =>
                               !a.cancelled &&
                               a.sessionId === s.id &&
                               a.coachId === coachId,
-                          )?.id,
-                    )}
-                    onClick={() => {
-                      setRequest(
-                        state.assignments.find(
-                          (a) =>
-                            !a.cancelled &&
-                            a.sessionId === s.id &&
-                            a.coachId === coachId,
-                        )!.id,
-                      );
-                      setReason("");
-                    }}
-                  >
-                    Request change
-                  </Button>
-                )}
+                          )!.id,
+                        );
+                        setRequestedSlots(
+                          assignmentBlocks(
+                            state.assignments.find(
+                              (a) =>
+                                !a.cancelled &&
+                                a.sessionId === s.id &&
+                                a.coachId === coachId,
+                            )!,
+                            s,
+                          ),
+                        );
+                        setReason("");
+                      }}
+                    >
+                      Request change
+                    </Button>
+                  )}
                 {tab === "Completed" && (
                   <Link className="button secondary" to="/timesheet">
                     Verify worked hours
@@ -782,6 +1017,8 @@ export function Sessions() {
                 s.requests.push({
                   id: crypto.randomUUID(),
                   assignmentId: request,
+                  originalSlots: structuredClone(requestAssignment!.slots),
+                  requestedSlots: structuredClone(requestedSlots),
                   reason: reason.trim(),
                   status: "Pending",
                 });
@@ -789,6 +1026,36 @@ export function Sessions() {
               setRequest(null);
             }}
           >
+            {requestSession && (
+              <section className="stack">
+                <h3>Requested time slots</h3>
+                {blocks(requestSession).map((b) => (
+                  <label className="check-line" key={b.start}>
+                    <input
+                      type="checkbox"
+                      checked={requestedSlots.some(
+                        (slot) => slot.start === b.start && slot.end === b.end,
+                      )}
+                      onChange={(e) =>
+                        setRequestedSlots(
+                          e.target.checked
+                            ? [...requestedSlots, b].sort((a, b) =>
+                                a.start.localeCompare(b.start),
+                              )
+                            : requestedSlots.filter(
+                                (slot) => slot.start !== b.start,
+                              ),
+                        )
+                      }
+                    />
+                    {b.start}–{b.end}
+                  </label>
+                ))}
+                <p className="small muted">
+                  Untick all slots if you cannot attend.
+                </p>
+              </section>
+            )}
             <label>
               Reason
               <textarea
@@ -835,5 +1102,88 @@ export function Sessions() {
         </Modal>
       )}
     </>
+  );
+}
+
+function AvailabilitySlots({
+  date,
+  sessions,
+  value,
+  available,
+  onClose,
+  onSave,
+}: {
+  date: string;
+  sessions: Session[];
+  value: Record<string, string[]>;
+  available: boolean;
+  onClose: () => void;
+  onSave: (value: Record<string, string[]>) => void;
+}) {
+  const [choices, setChoices] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(
+      sessions.map((s) => [
+        s.id,
+        value[s.id] ?? (available ? blocks(s).map((b) => b.start) : []),
+      ]),
+    ),
+  );
+  const all = sessions.every((s) =>
+    blocks(s).every((b) => choices[s.id].includes(b.start)),
+  );
+  return (
+    <Modal title="Select available time slots" onClose={onClose}>
+      <p>{format(parseISO(date), "EEEE, d MMMM yyyy")} (SGT)</p>
+      <label className="check-line">
+        <input
+          type="checkbox"
+          checked={all}
+          onChange={(e) =>
+            setChoices(
+              Object.fromEntries(
+                sessions.map((s) => [
+                  s.id,
+                  e.target.checked ? blocks(s).map((b) => b.start) : [],
+                ]),
+              ),
+            )
+          }
+        />
+        Tick all
+      </label>
+      {sessions.map((s) => (
+        <section className="card stack" key={s.id}>
+          <h3>{s.title}</h3>
+          <p className="small muted">{s.venue}</p>
+          {blocks(s).map((b) => (
+            <label className="check-line" key={b.start}>
+              <input
+                type="checkbox"
+                checked={choices[s.id].includes(b.start)}
+                onChange={(e) =>
+                  setChoices({
+                    ...choices,
+                    [s.id]: e.target.checked
+                      ? [...choices[s.id], b.start]
+                      : choices[s.id].filter((start) => start !== b.start),
+                  })
+                }
+              />
+              {b.start}–{b.end}
+            </label>
+          ))}
+        </section>
+      ))}
+      <p className="small muted">
+        Save your selection, then submit availability for the month. Clear all
+        slots to remove this date.
+      </p>
+      <div className="actions">
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={() => onSave(choices)}>Save time slots</Button>
+      </div>
+    </Modal>
   );
 }

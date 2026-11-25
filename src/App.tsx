@@ -13,7 +13,7 @@ import { Calendar, Sessions } from "./Calendar";
 import { Attendance } from "./Attendance";
 import { Timesheet } from "./Timesheet";
 import { Reports } from "./Reports";
-import { Coaches, CreateProgramme, Programmes } from "./Programmes";
+import { Coaches, Programmes } from "./Programmes";
 import { Button, Modal } from "./components";
 import { StoreProvider, useStore } from "./store";
 import type { Role } from "./model";
@@ -62,10 +62,11 @@ function Shell() {
           <NavLink to="/calendar">Calendar</NavLink>
           {role !== "Admin" && <NavLink to="/sessions">My sessions</NavLink>}
           <NavLink to="/programmes">Programmes</NavLink>
-          <NavLink to="/coaches">Coaches</NavLink>
+          {role !== "Assistant Coach" && (
+            <NavLink to="/coaches">Coaches</NavLink>
+          )}
           {role === "Admin" && (
             <>
-              <NavLink to="/programmes/new">Manage programmes</NavLink>
               <NavLink to="/reports">Reports</NavLink>
             </>
           )}
@@ -114,11 +115,18 @@ function Shell() {
             path="/programmes/new"
             element={
               <Guard roles={["Admin"]}>
-                <CreateProgramme />
+                <Navigate to="/programmes?add=1" replace />
               </Guard>
             }
           />
-          <Route path="/coaches" element={<Coaches />} />
+          <Route
+            path="/coaches"
+            element={
+              <Guard roles={["Admin", "Head Coach"]}>
+                <Coaches />
+              </Guard>
+            }
+          />
           <Route
             path="/reports"
             element={
