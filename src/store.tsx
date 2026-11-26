@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { cloudEnabled } from "./firebase";
+import { listenShared, saveShared, cloudError } from "./cloudStore";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
 import { removeLegacyDemo } from "./migrations";
 import { seed, sgtNow } from "./model";
@@ -56,11 +58,38 @@ type Store = {
   now: string;
   notice: string;
   notify: (s: string) => void;
-  commit: (action: string, detail: string, fn: (s: State) => void) => void;
+  commit: (
+    action: string,
+    detail: string,
+    fn: (s: State) => void,
+  ) => Promise<boolean>;
 };
 const Context = createContext<Store | null>(null);
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState(read);
+  const [state, setState] = useState(() => (cloudEnabled ? seed() : read()));
+  const [connection, setConnection] = useState(
+    cloudEnabled ? "Connecting to shared demo..." : "Local demo",
+  );
+  const [ready, setReady] = useState(!cloudEnabled);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const revision = useRef(0);
+  useEffect(() => {
+    if (!cloudEnabled) return;
+    return listenShared(
+      (value) => {
+        if (value.revision < revision.current) return;
+        revision.current = value.revision;
+        setState(value.state);
+        setReady(true);
+        setConnection("Shared demo connected");
+      },
+      (error) => {
+        setReady(false);
+        setConnection(cloudError(error));
+      },
+    );
+  }, []);
   const [role, setRole] = useState<Role>(() => preferences().role);
   const [coachId, setCoachId] = useState(() =>
     state.coaches.some((c) => c.id === preferences().coachId)
@@ -111,7 +140,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const [notice, notify] = useState("");
   const now = liveNow;
-  function commit(action: string, detail: string, fn: (s: State) => void) {
+  async function commit(
+    action: string,
+    detail: string,
+    fn: (s: State) => void,
+  ) {
+    if (!ready || savingRef.current) {
+      notify("Wait for the shared demo to connect or finish saving.");
+      return false;
+    }
     const next = structuredClone(state);
     fn(next);
     next.audit.unshift({
@@ -123,15 +160,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       action,
       detail,
     });
+    if (cloudEnabled) {
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        const result = await saveShared(revision.current, next);
+        if (result.revision >= revision.current) {
+          revision.current = result.revision;
+          setState(result.state);
+        }
+        notify(action);
+        return true;
+      } catch (error) {
+        notify(cloudError(error));
+        return false;
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }
     try {
       localStorage.setItem(KEY, JSON.stringify(next));
       setState(next);
       notify(action);
+      return true;
     } catch {
       notify(
         "Could not save: browser storage is unavailable or full. Your previous saved data is unchanged.",
       );
     }
+    return false;
   }
   return (
     <Context.Provider
@@ -149,7 +207,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         commit,
       }}
     >
-      {children}
+      {cloudEnabled && (
+        <div className="cloud-status" role="status">
+          {saving ? "Saving to shared demo..." : connection}{" "}
+          <small>Demo accounts only; roles are not authenticated.</small>
+        </div>
+      )}
+      <fieldset className="store-content" disabled={!ready || saving}>
+        {children}
+      </fieldset>
     </Context.Provider>
   );
 }

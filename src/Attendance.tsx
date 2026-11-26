@@ -46,15 +46,18 @@ export function Attendance() {
     setError("");
     setAdd(true);
   };
-  function save() {
-    commit("Attendance saved", session!.title, (s) => {
-      for (const a of assigned)
-        s.attendance[a.id] = {
-          marks: marks[a.id] ?? s.attendance[a.id]?.marks ?? {},
-          notes: notesChanged ? notes : (s.attendance[a.id]?.notes ?? ""),
-          savedAt: new Date().toISOString(),
-        };
-    });
+  async function save() {
+    if (
+      !(await commit("Attendance saved", session!.title, (s) => {
+        for (const a of assigned)
+          s.attendance[a.id] = {
+            marks: marks[a.id] ?? s.attendance[a.id]?.marks ?? {},
+            notes: notesChanged ? notes : (s.attendance[a.id]?.notes ?? ""),
+            savedAt: new Date().toISOString(),
+          };
+      }))
+    )
+      return;
     setMarks({});
     setNotesChanged(false);
   }
@@ -216,7 +219,7 @@ export function Attendance() {
         <Modal title="Add a last-minute coach" onClose={() => setAdd(false)}>
           <SessionInfo session={session} />
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               let problem = validateSlots(slots, session);
               const existing = assigned.find((a) => a.coachId === coach);
@@ -243,37 +246,40 @@ export function Attendance() {
                 setError(problem);
                 return;
               }
-              commit(
-                "Last-minute coach added",
-                `${state.coaches.find((c) => c.id === coach)!.name}: ${slots.map(slotKey).join(", ")}`,
-                (s) => {
-                  const id =
-                    existing?.id ?? `ATT-${crypto.randomUUID().slice(0, 8)}`;
-                  const a = existing
-                    ? s.assignments.find((a) => a.id === id)!
-                    : {
-                        id,
-                        sessionId: session.id,
-                        coachId: coach,
-                        slots: [] as Slot[],
-                        lastMinute: true,
-                        reason,
-                      };
-                  a.slots.push(...slots);
-                  if (!existing) s.assignments.push(a);
-                  const added = assignmentBlocks({ ...a, slots }, session);
-                  s.attendance[id] = {
-                    marks: {
-                      ...s.attendance[id]?.marks,
-                      ...Object.fromEntries(
-                        added.map((b) => [slotKey(b), "Present" as Mark]),
-                      ),
-                    },
-                    notes: reason,
-                    savedAt: new Date().toISOString(),
-                  };
-                },
-              );
+              if (
+                !(await commit(
+                  "Last-minute coach added",
+                  `${state.coaches.find((c) => c.id === coach)!.name}: ${slots.map(slotKey).join(", ")}`,
+                  (s) => {
+                    const id =
+                      existing?.id ?? `ATT-${crypto.randomUUID().slice(0, 8)}`;
+                    const a = existing
+                      ? s.assignments.find((a) => a.id === id)!
+                      : {
+                          id,
+                          sessionId: session.id,
+                          coachId: coach,
+                          slots: [] as Slot[],
+                          lastMinute: true,
+                          reason,
+                        };
+                    a.slots.push(...slots);
+                    if (!existing) s.assignments.push(a);
+                    const added = assignmentBlocks({ ...a, slots }, session);
+                    s.attendance[id] = {
+                      marks: {
+                        ...s.attendance[id]?.marks,
+                        ...Object.fromEntries(
+                          added.map((b) => [slotKey(b), "Present" as Mark]),
+                        ),
+                      },
+                      notes: reason,
+                      savedAt: new Date().toISOString(),
+                    };
+                  },
+                ))
+              )
+                return;
               setAdd(false);
             }}
           >

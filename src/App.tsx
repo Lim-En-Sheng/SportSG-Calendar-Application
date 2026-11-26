@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+import { cloudEnabled } from "./firebase";
+import { useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -140,8 +141,11 @@ function Shell() {
       </main>
       <footer className="app-footer">
         <span>
-          Local prototype · {role} · Live Singapore time:{" "}
-          {now.replace("T", " ")} (SGT) · Data saved in this browser
+          {cloudEnabled ? "Shared demo" : "Local prototype"} · {role} · Live
+          Singapore time: {now.replace("T", " ")} (SGT) ·{" "}
+          {cloudEnabled
+            ? "Shared Firestore data"
+            : "Data saved in this browser"}
         </span>
       </footer>
       {notice && (

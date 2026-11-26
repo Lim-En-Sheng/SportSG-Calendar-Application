@@ -39,21 +39,19 @@ export function Calendar() {
   const [editing, setEditing] = useState(false);
   const [removed, setRemoved] = useState<string[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
-  const [available, setAvailable] = useState(state.availability[coachId] ?? []);
-  const [editingAvailability, setEditingAvailability] = useState<string | null>(
-    null,
-  );
+  const available = state.availability[coachId] ?? [];
   const [slotDate, setSlotDate] = useState<string | null>(null);
-  const [slotChoices, setSlotChoices] = useState<Record<string, string[]>>(
-    state.availabilitySlots?.[coachId] ?? {},
-  );
+  const slotChoices = state.availabilitySlots?.[coachId] ?? {};
+  const isAssigned = (id: string) =>
+    state.assignments.some(
+      (a) => !a.cancelled && a.coachId === coachId && a.sessionId === id,
+    );
   const monthKey = format(month, "yyyy-MM");
   const submitted =
     !!state.availabilitySubmissions?.[coachId]?.[monthKey] &&
     (state.availability[coachId] ?? []).some((date) =>
       date.startsWith(monthKey),
     );
-  const updatingAvailability = editingAvailability === monthKey;
   const savedDates = state.availability[coachId] ?? [];
   const hasAssignment = (date: string) =>
     state.assignments.some(
@@ -106,20 +104,22 @@ export function Calendar() {
   const assistant = role === "Assistant Coach";
   const head = role === "Head Coach";
   function choose(date: string) {
-    if (assistant && date < now.slice(0, 10)) return;
+    if (
+      !state.sessions.some((s) => s.date === date) ||
+      (assistant && date < now.slice(0, 10))
+    )
+      return;
     setSelected(date);
     setSessionId("");
     setEditing(false);
     setPicked([]);
     if (
       assistant &&
-      !monthAssigned &&
-      date.startsWith(monthKey) &&
-      date >= now.slice(0, 10) &&
-      (!submitted || updatingAvailability) &&
-      state.sessions.some((s) => s.date === date)
+      state.sessions.some((s) => s.date === date && !isAssigned(s.id))
     )
       setSlotDate(date);
+    else if (assistant && hasAssignment(date))
+      navigate("/sessions?date=" + date);
   }
   return (
     <>
@@ -190,7 +190,7 @@ export function Calendar() {
                       .filter(Boolean)
                       .join(". ")}
                     disabled={
-                      assistant && (key < now.slice(0, 10) || !events.length)
+                      !events.length || (assistant && key < now.slice(0, 10))
                     }
                     aria-pressed={
                       assistant
@@ -201,7 +201,7 @@ export function Calendar() {
                     onDoubleClick={() => {
                       if (events.length)
                         navigate(
-                          `${assistant ? "/sessions" : "/programmes"}?date=${key}`,
+                          `${assistant && hasAssignment(key) ? "/sessions" : "/programmes"}?date=${key}`,
                         );
                     }}
                     onClick={() => choose(key)}
@@ -217,8 +217,9 @@ export function Calendar() {
                     {events.map((s) => (
                       <Link
                         className="day-event"
+                        title={s.title}
                         key={s.id}
-                        to={`${assistant ? "/sessions" : "/programmes"}?date=${key}&session=${encodeURIComponent(s.id)}`}
+                        to={`${assistant && isAssigned(s.id) ? "/sessions" : "/programmes"}?date=${key}&session=${encodeURIComponent(s.id)}`}
                         onDoubleClick={(e) => e.stopPropagation()}
                       >
                         {s.title}
@@ -243,12 +244,8 @@ export function Calendar() {
           </div>
           <p className="muted small">
             {assistant
-              ? monthAssigned
-                ? "Programmes assigned. Double-click a programme date or click its name to view details."
-                : submitted && !updatingAvailability
-                  ? "Selected dates are pending deployment. Use Update availability to change this month."
-                  : "Select a date to toggle your availability before submitting. Past dates are read-only."
-              : "Select a date to assign coaches."}
+              ? "Click a programme date to submit or update its available time slots. Assigned sessions can be changed through My sessions."
+              : "Select a programme date to assign coaches."}
           </p>
         </section>
         <aside className="card daily-panel">
@@ -263,117 +260,17 @@ export function Calendar() {
                 aria-label={`Availability for ${format(month, "MMMM yyyy")}`}
               >
                 <p className="small">{format(month, "MMMM yyyy")}</p>
-                {monthAssigned ? (
-                  <>
-                    <h3>Programmes assigned</h3>
-                    <Button variant="secondary" disabled>
-                      Update availability
-                    </Button>
-                  </>
-                ) : submitted && !updatingAvailability ? (
-                  <>
-                    <h3>Pending</h3>
-                    <p className="small">
-                      Submitted · {pendingDates.length}{" "}
-                      {pendingDates.length === 1 ? "day" : "days"} pending
-                      deployment
-                    </p>
-                    <Button
-                      variant="secondary"
-                      disabled={monthKey < now.slice(0, 7)}
-                      onClick={() => setEditingAvailability(monthKey)}
-                    >
-                      Update availability
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <h3>
-                      {updatingAvailability
-                        ? "Update availability"
-                        : "Select dates available"}
-                    </h3>
-                    <p className="small">Submit once for the whole month.</p>
-                    <Button
-                      disabled={monthKey < now.slice(0, 7)}
-                      onClick={() => {
-                        commit(
-                          "Availability submitted",
-                          format(month, "MMMM yyyy"),
-                          (s) => {
-                            s.availability[coachId] = [
-                              ...(s.availability[coachId] ?? []).filter(
-                                (date) => !date.startsWith(monthKey),
-                              ),
-                              ...available.filter((date) =>
-                                date.startsWith(monthKey),
-                              ),
-                            ];
-                            s.availabilitySlots ??= {};
-                            s.availabilitySlots[coachId] ??= {};
-                            for (const programme of s.sessions.filter((entry) =>
-                              entry.date.startsWith(monthKey),
-                            )) {
-                              s.availabilitySlots[coachId][programme.id] =
-                                available.includes(programme.date)
-                                  ? (slotChoices[programme.id] ??
-                                    blocks(programme).map((b) => b.start))
-                                  : [];
-                            }
-                            s.availabilitySubmissions ??= {};
-                            s.availabilitySubmissions[coachId] ??= {};
-                            if (
-                              s.availability[coachId].some((date) =>
-                                date.startsWith(monthKey),
-                              )
-                            ) {
-                              s.availabilitySubmissions[coachId][monthKey] = {
-                                submittedAt: new Date().toISOString(),
-                              };
-                            } else {
-                              delete s.availabilitySubmissions[coachId][
-                                monthKey
-                              ];
-                            }
-                          },
-                        );
-                        setEditingAvailability(null);
-                      }}
-                    >
-                      Submit availability
-                    </Button>
-                    {updatingAvailability && (
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setAvailable((dates) => [
-                            ...dates.filter(
-                              (date) => !date.startsWith(monthKey),
-                            ),
-                            ...savedDates.filter((date) =>
-                              date.startsWith(monthKey),
-                            ),
-                          ]);
-                          setSlotChoices((choices) => {
-                            const restored = { ...choices };
-                            for (const s of state.sessions.filter((s) =>
-                              s.date.startsWith(monthKey),
-                            )) {
-                              delete restored[s.id];
-                              if (state.availabilitySlots?.[coachId]?.[s.id])
-                                restored[s.id] =
-                                  state.availabilitySlots[coachId][s.id];
-                            }
-                            return restored;
-                          });
-                          setEditingAvailability(null);
-                        }}
-                      >
-                        Cancel update
-                      </Button>
-                    )}
-                  </>
-                )}
+                <h3>
+                  {monthAssigned
+                    ? "Programmes assigned"
+                    : submitted
+                      ? "Pending deployment"
+                      : "Click on a date to submit availability"}
+                </h3>
+                <p className="small">
+                  {pendingDates.length} dates pending deployment. Submit or
+                  update availability directly from each date.
+                </p>
               </div>
               <h3>My assigned sessions</h3>
               {state.assignments
@@ -410,7 +307,7 @@ export function Calendar() {
                       <div className="mini-session" key={s.id}>
                         <Link
                           className="text-link"
-                          to={`/sessions?session=${encodeURIComponent(s.id)}`}
+                          to={`/programmes?session=${encodeURIComponent(s.id)}`}
                         >
                           {s.title}
                         </Link>
@@ -602,40 +499,48 @@ export function Calendar() {
                           assigned.length - removed.length + picked.length >
                             session.needed
                         }
-                        onClick={() => {
-                          commit("Assignments updated", session.title, (s) => {
-                            for (const assignment of s.assignments) {
-                              if (
-                                !assignment.cancelled &&
-                                assignment.sessionId === session.id &&
-                                removed.includes(assignment.coachId)
-                              ) {
-                                assignment.cancelled = true;
-                                for (const request of s.requests) {
+                        onClick={async () => {
+                          if (
+                            !(await commit(
+                              "Assignments updated",
+                              session.title,
+                              (s) => {
+                                for (const assignment of s.assignments) {
                                   if (
-                                    request.assignmentId === assignment.id &&
-                                    request.status === "Pending"
-                                  )
-                                    request.status = "Approved";
+                                    !assignment.cancelled &&
+                                    assignment.sessionId === session.id &&
+                                    removed.includes(assignment.coachId)
+                                  ) {
+                                    assignment.cancelled = true;
+                                    for (const request of s.requests) {
+                                      if (
+                                        request.assignmentId ===
+                                          assignment.id &&
+                                        request.status === "Pending"
+                                      )
+                                        request.status = "Approved";
+                                    }
+                                  }
                                 }
-                              }
-                            }
-                            for (const id of picked)
-                              s.assignments.push({
-                                id: `ATT-${crypto.randomUUID().slice(0, 8)}`,
-                                coachId: id,
-                                sessionId: session.id,
-                                slots: blocks(session).filter((b) =>
-                                  (
-                                    newAssignments[id] ??
-                                    state.availabilitySlots?.[id]?.[
-                                      session.id
-                                    ] ??
-                                    blocks(session).map((x) => x.start)
-                                  ).includes(b.start),
-                                ),
-                              });
-                          });
+                                for (const id of picked)
+                                  s.assignments.push({
+                                    id: `ATT-${crypto.randomUUID().slice(0, 8)}`,
+                                    coachId: id,
+                                    sessionId: session.id,
+                                    slots: blocks(session).filter((b) =>
+                                      (
+                                        newAssignments[id] ??
+                                        state.availabilitySlots?.[id]?.[
+                                          session.id
+                                        ] ??
+                                        blocks(session).map((x) => x.start)
+                                      ).includes(b.start),
+                                    ),
+                                  });
+                              },
+                            ))
+                          )
+                            return;
                           setEditing(false);
                           setPicked([]);
                         }}
@@ -717,19 +622,46 @@ export function Calendar() {
       {slotDate && (
         <AvailabilitySlots
           date={slotDate}
-          sessions={state.sessions.filter((s) => s.date === slotDate)}
+          sessions={state.sessions.filter(
+            (s) => s.date === slotDate && !isAssigned(s.id),
+          )}
           value={slotChoices}
           available={available.includes(slotDate)}
           onClose={() => setSlotDate(null)}
-          onSave={(choices) => {
-            setSlotChoices({ ...slotChoices, ...choices });
-            const any = Object.values(choices).some((slots) => slots.length);
-            setAvailable((dates) =>
-              any
-                ? [...new Set([...dates, slotDate])]
-                : dates.filter((d) => d !== slotDate),
+          onSave={async (choices) => {
+            const saved = await commit(
+              available.includes(slotDate)
+                ? "Availability updated"
+                : "Availability submitted",
+              slotDate,
+              (s) => {
+                s.availabilitySlots ??= {};
+                s.availabilitySlots[coachId] ??= {};
+                Object.assign(s.availabilitySlots[coachId], choices);
+                const any = s.sessions.some(
+                  (p) =>
+                    p.date === slotDate &&
+                    (s.availabilitySlots?.[coachId]?.[p.id]?.length ?? 0) > 0,
+                );
+                s.availability[coachId] = [
+                  ...new Set([
+                    ...(s.availability[coachId] ?? []).filter(
+                      (d) => d !== slotDate,
+                    ),
+                    ...(any ? [slotDate] : []),
+                  ]),
+                ];
+                const key = slotDate.slice(0, 7);
+                s.availabilitySubmissions ??= {};
+                s.availabilitySubmissions[coachId] ??= {};
+                if (s.availability[coachId].some((d) => d.startsWith(key)))
+                  s.availabilitySubmissions[coachId][key] = {
+                    submittedAt: new Date().toISOString(),
+                  };
+                else delete s.availabilitySubmissions[coachId][key];
+              },
             );
-            setSlotDate(null);
+            if (saved) setSlotDate(null);
           }}
         />
       )}
@@ -800,31 +732,47 @@ function RequestReview({
         <div className="actions">
           <Button
             variant="secondary"
-            onClick={() => {
-              commit("Change request rejected", request.reason, (s) => {
-                s.requests.find((r) => r.id === requestId)!.status = "Rejected";
-              });
+            onClick={async () => {
+              if (
+                !(await commit(
+                  "Change request rejected",
+                  request.reason,
+                  (s) => {
+                    s.requests.find((r) => r.id === requestId)!.status =
+                      "Rejected";
+                  },
+                ))
+              )
+                return;
               onClose();
             }}
           >
             Reject
           </Button>
           <Button
-            onClick={() => {
-              commit("Change request approved", request.reason, (s) => {
-                s.requests.find((r) => r.id === requestId)!.status = "Approved";
-                const updated = s.assignments.find(
-                  (a) => a.id === assignment.id,
-                )!;
-                const slots = structuredClone(request.requestedSlots ?? []);
-                updated.slots = slots;
-                updated.cancelled = slots.length === 0;
-                s.availabilitySlots ??= {};
-                s.availabilitySlots[assignment.coachId] ??= {};
-                s.availabilitySlots[assignment.coachId][session.id] = (
-                  request.requestedSlots ?? assignment.slots
-                ).map((b) => b.start);
-              });
+            onClick={async () => {
+              if (
+                !(await commit(
+                  "Change request approved",
+                  request.reason,
+                  (s) => {
+                    s.requests.find((r) => r.id === requestId)!.status =
+                      "Approved";
+                    const updated = s.assignments.find(
+                      (a) => a.id === assignment.id,
+                    )!;
+                    const slots = structuredClone(request.requestedSlots ?? []);
+                    updated.slots = slots;
+                    updated.cancelled = slots.length === 0;
+                    s.availabilitySlots ??= {};
+                    s.availabilitySlots[assignment.coachId] ??= {};
+                    s.availabilitySlots[assignment.coachId][session.id] = (
+                      request.requestedSlots ?? assignment.slots
+                    ).map((b) => b.start);
+                  },
+                ))
+              )
+                return;
               onClose();
             }}
           >
@@ -839,7 +787,7 @@ function RequestReview({
 export function Sessions() {
   const { state, role, coachId, now, commit } = useStore();
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState("Assigned/Pending");
+  const [tab, setTab] = useState("Assigned");
   const linkedDate = params.get("date"),
     linkedSession = params.get("session");
   const isPending = (s: Session) =>
@@ -863,30 +811,47 @@ export function Sessions() {
               (a) => a.sessionId === s.id && a.coachId === coachId,
             ) || isPending(s),
         );
-  const visible = mine.filter((s) =>
-    linkedDate || linkedSession
-      ? (!linkedDate || s.date === linkedDate) &&
+  const hasActiveAssignment = (session: Session) =>
+    state.assignments.some(
+      (a) =>
+        a.sessionId === session.id &&
+        !a.cancelled &&
+        (role === "Head Coach" || a.coachId === coachId),
+    );
+  const hasCancelledAssignment = (session: Session) =>
+    state.assignments.some(
+      (a) =>
+        a.sessionId === session.id &&
+        a.cancelled &&
+        (role === "Head Coach" || a.coachId === coachId),
+    );
+  const visible = mine.filter((s) => {
+    if (linkedDate || linkedSession)
+      return (
+        (!linkedDate || s.date === linkedDate) &&
         (!linkedSession || s.id === linkedSession)
-      : tab === "Cancelled"
-        ? state.assignments.some(
-            (a) =>
-              a.sessionId === s.id &&
-              (role === "Head Coach" || a.coachId === coachId) &&
-              a.cancelled,
-          )
-        : (state.assignments.some(
-            (a) =>
-              a.sessionId === s.id &&
-              !a.cancelled &&
-              (role === "Head Coach" || a.coachId === coachId),
-          ) ||
-            (role === "Assistant Coach" && isPending(s))) &&
-          (tab === "Completed"
-            ? `${s.date}T${s.end}` <= now
-            : tab === "Assigned/Pending"
-              ? `${s.date}T${s.end}` > now
-              : false),
-  );
+      );
+    if (tab === "Cancelled")
+      return hasCancelledAssignment(s) && !hasActiveAssignment(s);
+    if (tab === "Pending")
+      return (
+        !hasActiveAssignment(s) &&
+        !hasCancelledAssignment(s) &&
+        (role === "Assistant Coach"
+          ? isPending(s)
+          : state.coaches.some(
+              (c) =>
+                state.availability[c.id]?.includes(s.date) &&
+                (state.availabilitySlots?.[c.id]?.[s.id]?.length ?? 1) > 0,
+            ))
+      );
+    return (
+      hasActiveAssignment(s) &&
+      (tab === "Completed"
+        ? s.date + "T" + s.end <= now
+        : s.date + "T" + s.end > now)
+    );
+  });
   return (
     <>
       <Heading
@@ -904,7 +869,7 @@ export function Sessions() {
         </Button>
       )}
       <div className="tabs">
-        {["Assigned/Pending", "Completed", "Cancelled"].map((t) => (
+        {["Assigned", "Pending", "Completed", "Cancelled"].map((t) => (
           <Button
             variant={tab === t ? "primary" : "secondary"}
             key={t}
@@ -919,7 +884,15 @@ export function Sessions() {
       </div>
       <section className="stack">
         <h2>
-          {tab === "Completed" ? "Completed sessions" : "My assigned sessions"}
+          {linkedDate || linkedSession
+            ? "Selected sessions"
+            : tab === "Cancelled"
+              ? "Cancelled sessions"
+              : tab === "Pending"
+                ? "Pending sessions"
+                : tab === "Completed"
+                  ? "Completed sessions"
+                  : "My assigned sessions"}
         </h2>
         {!visible.length && (
           <div className="card empty">No {tab.toLowerCase()} sessions.</div>
@@ -944,7 +917,7 @@ export function Sessions() {
               </Link>
             ) : (
               <>
-                {tab === "Assigned/Pending" &&
+                {tab === "Assigned" &&
                   state.assignments.some(
                     (a) =>
                       !a.cancelled &&
@@ -1010,19 +983,22 @@ export function Sessions() {
             active until it is approved.
           </p>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!reason.trim()) return;
-              commit("Change request submitted", reason, (s) => {
-                s.requests.push({
-                  id: crypto.randomUUID(),
-                  assignmentId: request,
-                  originalSlots: structuredClone(requestAssignment!.slots),
-                  requestedSlots: structuredClone(requestedSlots),
-                  reason: reason.trim(),
-                  status: "Pending",
-                });
-              });
+              if (
+                !(await commit("Change request submitted", reason, (s) => {
+                  s.requests.push({
+                    id: crypto.randomUUID(),
+                    assignmentId: request,
+                    originalSlots: structuredClone(requestAssignment!.slots),
+                    requestedSlots: structuredClone(requestedSlots),
+                    reason: reason.trim(),
+                    status: "Pending",
+                  });
+                }))
+              )
+                return;
               setRequest(null);
             }}
           >
@@ -1175,14 +1151,16 @@ function AvailabilitySlots({
         </section>
       ))}
       <p className="small muted">
-        Save your selection, then submit availability for the month. Clear all
-        slots to remove this date.
+        Submit these time slots directly to the head coach. Reopen this date to
+        update them. Clear all slots to withdraw unassigned availability.
       </p>
       <div className="actions">
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
-        <Button onClick={() => onSave(choices)}>Save time slots</Button>
+        <Button onClick={() => onSave(choices)}>
+          {available ? "Update availability" : "Submit availability"}
+        </Button>
       </div>
     </Modal>
   );

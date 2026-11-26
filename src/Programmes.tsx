@@ -1,3 +1,8 @@
+﻿import {
+  readProgrammeFile,
+  templateBlob,
+  type ImportResult,
+} from "./programmeImport";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
@@ -44,9 +49,14 @@ export function Programmes() {
         action={
           role === "Admin" && (
             <div className="row wrap" style={{ gap: "8px" }}>
-              <Button onClick={() => setParams({ add: "1" })}>Add programme</Button>
-              <Button variant="secondary" onClick={() => setCsvImport({ stage: "upload" })}>
-                Import CSV
+              <Button onClick={() => setParams({ add: "1" })}>
+                Add programme
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setCsvImport({ stage: "upload" })}
+              >
+                Import programmes
               </Button>
             </div>
           )
@@ -134,7 +144,7 @@ export function Programmes() {
         </Modal>
       )}
       {role === "Admin" && csvImport && (
-        <Modal title="Import programmes from CSV" onClose={closeCsvImport}>
+        <Modal title="Import programmes" onClose={closeCsvImport}>
           <CsvImportModal
             state={csvImport}
             onStateChange={setCsvImport}
@@ -147,357 +157,196 @@ export function Programmes() {
   );
 }
 
-type CsvImportState =
-  | { stage: "upload" }
-  | {
-      stage: "preview";
-      rows: CsvRow[];
-      validRows: CsvRow[];
-      errors: CsvError[];
-    }
-  | {
-      stage: "complete";
-      created: number;
-      skipped: number;
-    };
-
-interface CsvRow {
-  title: string;
-  date: string;
-  start: string;
-  end: string;
-  venue: string;
-  capacity: number;
-  needed: number;
-  level: string;
-  raw: Record<string, string>;
-}
-
-interface CsvError {
-  row: number;
-  message: string;
-  data?: CsvRow;
-}
-
+type CsvImportState = { stage: "upload" };
 function CsvImportModal({
-  state,
-  onStateChange,
   onClose,
   commit,
 }: {
   state: CsvImportState;
   onStateChange: (s: CsvImportState) => void;
   onClose: () => void;
-  commit: (action: string, detail: string, fn: (s: any) => void) => void;
+  commit: ReturnType<typeof useStore>["commit"];
 }) {
-  const fileInputRef = useState<HTMLInputElement | null>(null)[1];
-
-  if (state.stage === "upload") {
-    return (
-      <div className="card stack">
-        <p className="small muted">
-          Upload a CSV file with programme data. Each row creates one session.
-          Required columns: <strong>title, date, start, end, venue, capacity, needed, level</strong>
-        </p>
-        <p className="small muted">
-          Level must be one of: Beginner, Intermediate, Expert. Date format: YYYY-MM-DD. Time format: HH:MM (24-hour).
-        </p>
-        <div className="row wrap" style={{ gap: "8px", marginBottom: "8px" }}>
-          <Button variant="secondary" onClick={downloadTemplate}>
-            Download template
-          </Button>
-        </div>
-        <label>
-          CSV file *
-          <input
-            type="file"
-            accept=".csv"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            required
-          />
-        </label>
-        <div className="actions">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function downloadTemplate() {
-    const template = `title,date,start,end,venue,capacity,needed,level
-"Academy Coaching - Beginner",2025-01-15,09:00,10:30,"Bishan Stadium",20,2,Beginner
-"Academy Coaching - Intermediate",2025-01-15,11:00,12:30,"Bishan Stadium",25,3,Intermediate
-"Academy Coaching - Expert",2025-01-22,14:00,16:00,"OCBC Arena",15,2,Expert`;
-    const blob = new Blob([template], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "programme-import-template.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  if (state.stage === "preview") {
-    return (
-      <div className="card stack">
-        <p className="small muted">
-          Review the programmes to be imported. Valid rows: <strong>{state.validRows.length}</strong>{" "}
-          {state.errors.length > 0 && (
-            <span className="error"> · Errors: {state.errors.length}</span>
-          )}
-        </p>
-        {state.errors.length > 0 && (
-          <div className="card" style={{ background: "#fef2f2", borderColor: "#fecaca" }}>
-            <h3 className="error" style={{ marginBottom: "8px" }}>
-              Rows with errors (will be skipped):
-            </h3>
-            <ul style={{ margin: 0, paddingLeft: "20px" }}>
-              {state.errors.map((e, i) => (
-                <li key={i} className="small error">
-                  Row {e.row}: {e.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="table-scroll" style={{ maxHeight: "400px" }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Programme</th>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Venue</th>
-                <th>Capacity</th>
-                <th>Level</th>
-                <th>Coaches</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.validRows.map((row, i) => (
-                <tr key={i}>
-                  <td>{row.title}</td>
-                  <td>{row.date}</td>
-                  <td>
-                    {row.start}–{row.end}
-                  </td>
-                  <td>{row.venue}</td>
-                  <td>{row.capacity} pax</td>
-                  <td>{row.level}</td>
-                  <td>{row.needed}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="actions">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => handleImport(state.validRows, onStateChange, onClose, commit)}
-            disabled={state.validRows.length === 0}
-          >
-            Import {state.validRows.length} programme{state.validRows.length !== 1 ? "s" : ""}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.stage === "complete") {
-    return (
-      <div className="card stack" style={{ textAlign: "center", padding: "40px 24px" }}>
-        <div style={{ fontSize: "48px", marginBottom: "16px" }}>✓</div>
-        <h2>Import complete</h2>
-        <p className="muted">
-          Created <strong>{state.created}</strong> programme{state.created !== 1 ? "s" : ""}
-          {state.skipped > 0 && (
-            <span>, skipped <strong>{state.skipped}</strong> row{state.skipped !== 1 ? "s" : ""}</span>
-          )}
-        </p>
-        <div className="actions" style={{ justifyContent: "center" }}>
-          <Button onClick={onClose}>Done</Button>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [filename, setFilename] = useState("");
+  const [done, setDone] = useState(false);
+  async function upload(file?: File) {
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      parseCsv(text, onStateChange);
-    };
-    reader.readAsText(file);
-  }
-}
-
-function parseCsv(text: string, onStateChange: (s: CsvImportState) => void) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) {
-    onStateChange({
-      stage: "preview",
-      rows: [],
-      validRows: [],
-      errors: [{ row: 0, message: "CSV file is empty or has no data rows" }],
-    });
-    return;
-  }
-
-  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-  const requiredHeaders = ["title", "date", "start", "end", "venue", "capacity", "needed", "level"];
-  const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
-
-  if (missingHeaders.length > 0) {
-    onStateChange({
-      stage: "preview",
-      rows: [],
-      validRows: [],
-      errors: [
-        {
-          row: 0,
-          message: `Missing required columns: ${missingHeaders.join(", ")}`,
-        },
-      ],
-    });
-    return;
-  }
-
-  const rows: CsvRow[] = [];
-  const errors: CsvError[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const values = parseCsvLine(line);
-    if (values.length !== headers.length) {
-      errors.push({
-        row: i + 1,
-        message: `Column count mismatch (expected ${headers.length}, got ${values.length})`,
-      });
-      continue;
-    }
-
-    const rowData: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      rowData[h] = values[idx]?.trim() ?? "";
-    });
-
-    const validation = validateRow(rowData, i + 1);
-    if (validation.error) {
-      errors.push({ row: i + 1, message: validation.error, data: validation.row });
-    } else if (validation.row) {
-      rows.push(validation.row);
+    setBusy(true);
+    setError("");
+    setResult(null);
+    setFilename(file.name);
+    try {
+      setResult(await readProgrammeFile(file));
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Could not read this file. Please try again.",
+      );
+    } finally {
+      setBusy(false);
     }
   }
-
-  onStateChange({
-    stage: "preview",
-    rows,
-    validRows: rows,
-    errors,
-  });
-}
-
-function parseCsvLine(line: string): string[] {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === "," && !inQuotes) {
-      result.push(current);
-      current = "";
-    } else {
-      current += char;
+  async function downloadTemplate() {
+    setBusy(true);
+    setError("");
+    try {
+      const url = URL.createObjectURL(await templateBlob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "programme-import-template.xlsx";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      setError("Could not download the template. Please try again.");
+    } finally {
+      setBusy(false);
     }
   }
-  result.push(current);
-  return result;
-}
-
-function validateRow(
-  data: Record<string, string>,
-  _rowNum: number,
-): { row?: CsvRow; error?: string } {
-  const title = data.title?.trim();
-  const date = data.date?.trim();
-  const start = data.start?.trim();
-  const end = data.end?.trim();
-  const venue = data.venue?.trim();
-  const capacity = Number(data.capacity);
-  const needed = Number(data.needed);
-  const level = data.level?.trim();
-
-  if (!title) return { error: "Missing programme name" };
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Invalid date format (use YYYY-MM-DD)" };
-  if (!start || !/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) return { error: "Invalid start time (use HH:MM 24-hour)" };
-  if (!end || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end)) return { error: "Invalid end time (use HH:MM 24-hour)" };
-  if (start >= end) return { error: "End time must be after start time" };
-  if (!venue) return { error: "Missing venue" };
-  if (!Number.isInteger(capacity) || capacity < 1) return { error: "Capacity must be a positive integer" };
-  if (!Number.isInteger(needed) || needed < 1) return { error: "Coaches needed must be a positive integer" };
-  if (!["Beginner", "Intermediate", "Expert"].includes(level)) return { error: "Level must be Beginner, Intermediate, or Expert" };
-
-  return {
-    row: {
-      title,
-      date,
-      start,
-      end,
-      venue,
-      capacity,
-      needed,
-      level,
-      raw: data,
-    },
-  };
-}
-
-function handleImport(
-  validRows: CsvRow[],
-  onStateChange: (s: CsvImportState) => void,
-  onClose: () => void,
-  commit: (action: string, detail: string, fn: (s: any) => void) => void,
-) {
-  commit(
-    "Programmes imported from CSV",
-    `${validRows.length} programmes`,
-    (s) => {
-      for (const row of validRows) {
-        s.sessions.push({
-          ...row,
-          id: crypto.randomUUID(),
-        });
-      }
-    },
+  if (done && result)
+    return (
+      <div className="stack">
+        <h2>Import complete</h2>
+        <p>
+          Created {result.validRows.length} programmes. Skipped{" "}
+          {result.errors.length} invalid rows.
+        </p>
+        <Button onClick={onClose}>Done</Button>
+      </div>
+    );
+  return (
+    <div className="stack">
+      <p>
+        Upload Excel (.xlsx) or CSV. Each row creates one programme session. For
+        multiple dates, use one row per date.
+      </p>
+      <p className="small muted">
+        The Excel template includes a blank Programmes sheet, instructions and
+        examples. Only the Programmes sheet is imported (or the first sheet in
+        older workbooks). Dates: YYYY-MM-DD. Times: HH:MM, 24-hour. Excel date
+        and time cells also work.
+      </p>
+      <div>
+        <Button variant="secondary" disabled={busy} onClick={downloadTemplate}>
+          Download Excel template
+        </Button>
+      </div>
+      <label>
+        Excel or CSV file
+        <input
+          type="file"
+          accept=".xlsx,.csv"
+          disabled={busy}
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {busy && <p role="status">Preparing file...</p>}
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+      {result && (
+        <>
+          <p>
+            <strong>{filename}</strong>: {result.validRows.length} valid
+            programmes
+            {result.errors.length > 0 ? `, ${result.errors.length} issues` : ""}
+            . Nothing has been imported yet.
+          </p>
+          {result.errors.length > 0 && (
+            <div role="alert" className="card">
+              <h3>Fix these issues and upload again</h3>
+              <p className="small">
+                You can also choose to import only the valid rows below. Invalid
+                rows will be skipped.
+              </p>
+              <ul style={{ maxHeight: 180, overflow: "auto" }}>
+                {result.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.row ? `Row ${e.row}: ` : "File: "}
+                    {e.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.validRows.length > 0 && (
+            <div className="table-scroll" style={{ maxHeight: 350 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Programme</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Location</th>
+                    <th>Capacity</th>
+                    <th>Coaches needed</th>
+                    <th>Level</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.validRows.map((row, i) => (
+                    <tr key={i}>
+                      <td>{row.title}</td>
+                      <td>{row.date}</td>
+                      <td>
+                        {row.start} - {row.end}
+                      </td>
+                      <td>{row.venue}</td>
+                      <td>{row.capacity}</td>
+                      <td>{row.needed}</td>
+                      <td>{row.level}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="small muted">
+            Import adds new sessions; it does not update existing programmes.
+          </p>
+        </>
+      )}
+      <div className="actions">
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        {result && (
+          <Button
+            disabled={busy || !result.validRows.length}
+            onClick={async () => {
+              if (
+                await commit(
+                  "Programmes imported",
+                  `${result.validRows.length} programmes from ${filename}`,
+                  (s) => {
+                    s.sessions.push(
+                      ...result.validRows.map((row) => ({
+                        ...row,
+                        id: crypto.randomUUID(),
+                      })),
+                    );
+                  },
+                )
+              )
+                setDone(true);
+            }}
+          >
+            Import {result?.validRows.length}{" "}
+            {result?.errors.length ? "valid programmes only" : "programmes"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
-  onStateChange({
-    stage: "complete",
-    created: validRows.length,
-    skipped: 0,
-  });
-  setTimeout(onClose, 1500);
 }
-
 function ProgrammeEditor({
   session,
   onClose,
@@ -533,7 +382,7 @@ function ProgrammeEditor({
       <div className="programme-editor">
         <form
           className="card stack"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             const dates = [value.date, ...extraDates];
             if (
@@ -580,31 +429,34 @@ function ProgrammeEditor({
               );
               return;
             }
-            commit(
-              session ? "Programme updated" : "Programme created",
-              value.title,
-              (s) => {
-                const details = {
-                  ...value,
-                  title: value.title.trim(),
-                  venue: value.venue.trim(),
-                };
-                if (session) {
-                  const index = s.sessions.findIndex(
-                    (entry) => entry.id === session.id,
-                  );
-                  if (index >= 0)
-                    s.sessions[index] = { ...details, id: session.id };
-                } else {
-                  for (const date of dates)
-                    s.sessions.push({
-                      ...details,
-                      date,
-                      id: crypto.randomUUID(),
-                    });
-                }
-              },
-            );
+            if (
+              !(await commit(
+                session ? "Programme updated" : "Programme created",
+                value.title,
+                (s) => {
+                  const details = {
+                    ...value,
+                    title: value.title.trim(),
+                    venue: value.venue.trim(),
+                  };
+                  if (session) {
+                    const index = s.sessions.findIndex(
+                      (entry) => entry.id === session.id,
+                    );
+                    if (index >= 0)
+                      s.sessions[index] = { ...details, id: session.id };
+                  } else {
+                    for (const date of dates)
+                      s.sessions.push({
+                        ...details,
+                        date,
+                        id: crypto.randomUUID(),
+                      });
+                  }
+                },
+              ))
+            )
+              return;
             onClose();
           }}
         >

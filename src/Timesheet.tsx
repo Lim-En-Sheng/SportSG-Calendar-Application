@@ -183,8 +183,8 @@ export function Timesheet() {
               now.slice(0, 7) !== month ||
               !changed
             }
-            onClick={() =>
-              commit(
+            onClick={async () =>
+              await commit(
                 "Verified timesheet sent",
                 `${month} · v${(latest?.version ?? 0) + 1}`,
                 (s) => {
@@ -226,7 +226,7 @@ export function Timesheet() {
             </p>
           </div>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const problem = validateSlots(slots, session, true);
               if (problem) {
@@ -239,17 +239,20 @@ export function Timesheet() {
                 !canVerify(session, now)
               )
                 return;
-              commit(
-                "Worked hours verified",
-                `${session.date} · ${hours(slots)} hours`,
-                (s) => {
-                  s.drafts[review] = {
-                    slots,
-                    explanation,
-                    verifiedAt: new Date().toISOString(),
-                  };
-                },
-              );
+              if (
+                !(await commit(
+                  "Worked hours verified",
+                  `${session.date} · ${hours(slots)} hours`,
+                  (s) => {
+                    s.drafts[review] = {
+                      slots,
+                      explanation,
+                      verifiedAt: new Date().toISOString(),
+                    };
+                  },
+                ))
+              )
+                return;
               setReview(null);
             }}
           >

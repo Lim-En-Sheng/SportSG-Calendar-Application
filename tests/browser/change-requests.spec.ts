@@ -75,7 +75,7 @@ for (const decision of ["Approve", "Reject"])
       await expect(page.getByRole("dialog")).toContainText("11:00–12:00");
       await page.getByRole("button", { name: decision, exact: true }).click();
       await login("c2");
-      await expect(day).toHaveCSS("background-color", "rgb(220, 252, 231)");
+      await expect(day.locator("strong")).toHaveCSS("background-color", "rgb(220, 252, 231)");
       await expect(
         page
           .locator(".daily-panel")
@@ -85,5 +85,5 @@ for (const decision of ["Approve", "Reject"])
         page.locator(".daily-panel").getByRole("link", { name: /Girls Only/ }),
       ).toBeVisible();
       await page.reload();
-      await expect(day).toHaveCSS("background-color", "rgb(220, 252, 231)");
+      await expect(day.locator("strong")).toHaveCSS("background-color", "rgb(220, 252, 231)");
     });

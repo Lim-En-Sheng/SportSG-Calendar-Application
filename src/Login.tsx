@@ -1,4 +1,5 @@
-﻿import { useState } from "react";
+import { cloudEnabled } from "./firebase";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "./store";
 import { Button } from "./components";
@@ -64,7 +65,10 @@ export function Login() {
           </Button>
         </form>
         <p className="login-note">
-          Demo accounts only. Your data is saved in this browser.
+          Demo accounts only.{" "}
+          {cloudEnabled
+            ? "Data is shared with everyone using this demo."
+            : "Your data is saved in this browser."}
         </p>
       </section>
     </main>

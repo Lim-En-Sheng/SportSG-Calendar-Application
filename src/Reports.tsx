@@ -338,7 +338,7 @@ export function Reports() {
     setReason("");
     setError("");
   };
-  function resolveRecord() {
+  async function resolveRecord() {
     if (!row || !session) return;
     const problem = validateSlots(slots, session, true);
     if (problem) {
@@ -346,19 +346,22 @@ export function Reports() {
       return;
     }
     if (!reason.trim() || !decision) return;
-    commit(
-      "Attendance difference resolved",
-      `${row.coach} · ${row.date}`,
-      (s) => {
-        s.resolutions[row.id] = {
-          slots,
-          reason: reason.trim(),
-          by: "Admin",
-          at: new Date().toISOString(),
-          fingerprint: row.fingerprint,
-        };
-      },
-    );
+    if (
+      !(await commit(
+        "Attendance difference resolved",
+        `${row.coach} · ${row.date}`,
+        (s) => {
+          s.resolutions[row.id] = {
+            slots,
+            reason: reason.trim(),
+            by: "Admin",
+            at: new Date().toISOString(),
+            fingerprint: row.fingerprint,
+          };
+        },
+      ))
+    )
+      return;
     setDetail(null);
   }
   const label =
@@ -754,17 +757,24 @@ export function Reports() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (differences.length || !completed.length) {
                   notify("Resolve all differences before verifying.");
                   return;
                 }
-                commit("Final attendance sheet verified", month, (s) => {
-                  s.finalised[month] = {
-                    fingerprint: sheetFingerprint(completed),
-                    at: new Date().toISOString(),
-                  };
-                });
+                if (
+                  !(await commit(
+                    "Final attendance sheet verified",
+                    month,
+                    (s) => {
+                      s.finalised[month] = {
+                        fingerprint: sheetFingerprint(completed),
+                        at: new Date().toISOString(),
+                      };
+                    },
+                  ))
+                )
+                  return;
                 setVerify(false);
                 change("sheet", "final");
               }}

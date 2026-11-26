@@ -42,7 +42,7 @@ test("programme availability uses hourly slots and confirmed links open My sessi
     name: "Thursday, 26 November 2026",
     exact: true,
   });
-  await day.click();
+  await day.click({ position: { x: 15, y: 15 } });
   const dialog = page.getByRole("dialog");
   // New blocks with 15-min breaks: 09:00-10:00, 10:15-11:15
   await expect(dialog.getByRole("checkbox")).toHaveCount(3); // Tick all + 2 blocks
@@ -50,30 +50,45 @@ test("programme availability uses hourly slots and confirmed links open My sessi
   await dialog
     .getByRole("checkbox", { name: "09:00–10:00", exact: true })
     .uncheck();
-  await dialog.getByRole("button", { name: "Save time slots" }).click();
-  await expect(day).toHaveCSS("background-color", "rgb(254, 243, 199)");
-  await page.getByRole("button", { name: "Submit availability" }).click();
+  await dialog.getByRole("button", { name: "Submit availability" }).click();
+  await expect(day.locator("strong")).toHaveCSS(
+    "background-color",
+    "rgb(254, 243, 199)",
+  );
+  await expect(
+    page.locator(".daily-panel").getByRole("button", { name: /availability/i }),
+  ).toHaveCount(0);
+  await page.getByRole('link', {name:'My sessions', exact:true}).click();
+  await expect(page.getByRole('heading', {name:'Basketball',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Pending',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Pending sessions',exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Basketball',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Cancelled',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Cancelled sessions',exact:true})).toBeVisible();
+  await page.getByRole('link',{name:'Calendar',exact:true}).click();
   await page.reload();
-  await page.getByRole("button", { name: "Update availability" }).click();
-  await day.click();
+
+  await day.click({ position: { x: 15, y: 15 } });
   await expect(
     dialog.getByRole("checkbox", { name: "09:00–10:00", exact: true }),
   ).not.toBeChecked();
   await expect(
     dialog.getByRole("checkbox", { name: "10:15–11:15", exact: true }),
   ).toBeChecked();
-  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  await page.getByRole("button", { name: "Cancel update" }).click();
+  await dialog
+    .getByRole("button", { name: "Update availability", exact: true })
+    .click();
+
   await page
     .locator(".daily-panel")
     .getByRole("link", { name: "Basketball", exact: true })
     .click();
-  await expect(page).toHaveURL(/sessions\?session=p1/);
+  await expect(page).toHaveURL(/programmes\?session=p1/);
   await expect(
-    page.getByRole("heading", { name: "Basketball", exact: true }),
+    page.getByRole("cell", { name: "Basketball", exact: true }),
   ).toBeVisible();
   await login("head");
-  await day.click();
+  await day.click({ position: { x: 15, y: 15 } });
   await page.getByRole("button", { name: "Update assignments" }).click();
   await page.getByRole("checkbox", { name: "Ryan Coo", exact: true }).check();
   await expect(
@@ -87,7 +102,7 @@ test("programme availability uses hourly slots and confirmed links open My sessi
     { start: "10:15", end: "11:15" },
   ]);
   await login("c2");
-  await day.dblclick();
+  await day.click({ position: { x: 15, y: 15 } });
   await expect(page).toHaveURL(/sessions\?date=2026-11-26/);
   await expect(
     page.getByRole("heading", { name: "Basketball", exact: true }),
