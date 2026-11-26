@@ -1,6 +1,5 @@
 ﻿import { seed } from "./model";
 import type { State } from "./model";
-import { dataMode } from "./dataConfig";
 import { supabase } from "./supabase";
 import { decodeShared, type SharedState } from "./sharedState";
 export type { SharedState } from "./sharedState";
@@ -20,20 +19,6 @@ export function listenShared(
   error: (error: Error) => void,
 ) {
   let stopped = false;
-  if (dataMode === "firebase") {
-    let stop: (() => void) | undefined;
-    void import("./firebaseStore")
-      .then((module) => {
-        if (!stopped) stop = module.listenShared(next, error);
-      })
-      .catch((e) => {
-        if (!stopped) error(new Error(cloudError(e)));
-      });
-    return () => {
-      stopped = true;
-      stop?.();
-    };
-  }
   let pending = false,
     again = false;
   async function refresh() {
@@ -90,11 +75,6 @@ export async function saveShared(
   expectedRevision: number,
   state: State,
 ): Promise<SharedState> {
-  if (dataMode === "firebase")
-    return (await import("./firebaseStore")).saveShared(
-      expectedRevision,
-      state,
-    );
   const { data, error } = await supabase
     .rpc("coach_calendar_save", {
       expected_revision: expectedRevision,
@@ -112,8 +92,6 @@ export function cloudError(error: unknown): string {
     return "Another workstation changed the demo. Refresh, review the latest data and try again.";
   if (e?.code === "42501")
     return "Supabase demo access is denied or expired. Check SUPABASE_SETUP.md.";
-  if (e?.code === "permission-denied")
-    return "Firebase rollback access is denied. Check the original Firestore rules.";
   return (
     e?.message ||
     "Could not reach the database. Check your connection, then reload to verify the latest data before retrying."

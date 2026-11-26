@@ -15,22 +15,11 @@ The setup script creates:
 
 **Demo access expires on 10 December 2026 UTC. Until then, anyone with the public project details can read or change the demo through the RPCs.** UI-selected roles are not security boundaries. Use fictional data only. Add Supabase Auth and user-specific policies before real use. Private tables are protected from direct anonymous access, but the deliberately public demo RPCs expose their data.
 
-## Switching modes
+## Local development and backups
 
-Default: Supabase. For a temporary rollback, put `VITE_DATA_MODE=firebase` in `.env.local` and restart Vite. For browser-local data use `VITE_DATA_MODE=local`. Delete that setting to return to Supabase. These are build-time settings; a hosted deployment must be rebuilt to change mode.
+Supabase is the default. For browser-local data, set `VITE_DATA_MODE=local` in `.env.local` and restart Vite. Remove that setting to return to Supabase. A hosted deployment must be rebuilt to change mode.
 
-The sources do not synchronise with each other. Avoid editing the Firebase-hosted version while moving to Supabase. Keep Firebase until the new hosted deployment is verified.
-
-## Preserve and transfer Firebase data
-
-The migration utility never deletes Firebase records and refuses to overwrite any nonempty Supabase database:
-
-```powershell
-node scripts/migrate-firebase.mjs export
-node scripts/migrate-firebase.mjs import .backups/<exported-file>.json
-```
-
-Export prints the exact backup path and counts. Import checks that Supabase revision is zero, writes atomically, and compares every saved record with the backup. `.backups/` is Git-ignored; keep a copy outside the repository too. Do not rerun import after normal Supabase editing; it will stop instead of replacing data.
+The completed migration backup is retained in the Git-ignored `.backups/` directory. Keep a separate copy for recovery. The application no longer includes the previous database provider or migration utility.
 
 ## Verification and limits
 

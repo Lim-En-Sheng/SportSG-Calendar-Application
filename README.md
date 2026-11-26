@@ -15,7 +15,7 @@ A coaching operations web application that brings programme scheduling, coach as
 ---
 
 > **Project status — Functional local prototype**  
-> Shared demo data uses Supabase. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for setup, migration and rollback. Login is still a demo account selector; authenticated role enforcement and connected spreadsheet accounts are not implemented.
+> Shared demo data uses Supabase. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for setup and local development. Login is still a demo account selector; authenticated role enforcement and connected spreadsheet accounts are not implemented.
 
 ## OpenAI site hosted app
 

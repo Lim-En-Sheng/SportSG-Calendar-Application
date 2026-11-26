@@ -1,4 +1,3 @@
-﻿// Firebase is retained temporarily for migration/rollback; no automatic fallback.
-export const dataMode = import.meta.env.VITE_DATA_MODE ?? "supabase";
-export const cloudEnabled = dataMode !== "local";
-export const cloudLabel = dataMode === "firebase" ? "Firebase" : "Supabase";
+// Shared Supabase data by default; local mode is for offline development and tests.
+export const cloudEnabled = import.meta.env.VITE_DATA_MODE !== "local";
+export const cloudLabel = "Supabase";

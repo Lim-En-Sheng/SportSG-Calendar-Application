@@ -1,9 +1,4 @@
 {
-  "overrides": {
-    "@firebase/firestore": {
-      "@grpc/grpc-js": "1.14.6"
-    }
-  },
   "name": "coach-calendar",
   "private": true,
   "version": "0.0.0",
@@ -24,7 +19,6 @@
     "@supabase/supabase-js": "^2.119.2",
     "@tanstack/react-table": "^9.3.1",
     "date-fns": "^4.4.0",
-    "firebase": "^13.4.0",
     "lucide-react": "^1.79.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
