@@ -67,9 +67,6 @@ export function Calendar() {
         (s) => s.id === a.sessionId && s.date.startsWith(monthKey),
       ),
   );
-  const pendingDates = savedDates.filter(
-    (date) => date.startsWith(monthKey) && !hasAssignment(date),
-  );
   const pendingSessions = submitted
     ? state.sessions.filter(
         (s) =>
@@ -257,8 +254,9 @@ export function Calendar() {
                       : "Click on a date to submit availability"}
                 </h3>
                 <p className="small">
-                  {pendingDates.length} dates pending deployment. Submit or
-                  update availability directly from each date.
+                  {pendingSessions.length}{" "}
+                  {pendingSessions.length === 1 ? "programme" : "programmes"} pending
+                  deployment. Submit availability directly from each date.
                 </p>
               </div>
               <h3>My assigned sessions</h3>
@@ -646,6 +644,15 @@ export function Sessions() {
               (a) => a.sessionId === s.id && a.coachId === coachId,
             ) || isPending(s),
         );
+  const myActiveAssignments = (session: Session) =>
+    state.assignments.filter(
+      (a) =>
+        a.sessionId === session.id && a.coachId === coachId && !a.cancelled,
+    );
+  const myAssignedSlots = (session: Session) =>
+    myActiveAssignments(session)
+      .flatMap((a) => a.slots)
+      .sort((a, b) => a.start.localeCompare(b.start));
   const hasActiveAssignment = (session: Session) =>
     state.assignments.some(
       (a) =>
@@ -743,6 +750,13 @@ export function Sessions() {
               <p>
                 {s.start}–{s.end} · {s.venue}
               </p>
+              {role === "Assistant Coach" &&
+                myActiveAssignments(s).length > 0 && (
+                  <p className="assigned-timeslots">
+                    <strong>Your assigned timeslots:</strong>{" "}
+                    {slotText(myAssignedSlots(s))}
+                  </p>
+                )}
               <small>Head coach: {s.headCoachName || "Not assigned"}</small>
             </div>
             <Button onClick={() => setDetail(s)}>View details</Button>
@@ -889,6 +903,20 @@ export function Sessions() {
       {detail && (
         <Modal title="Session details" onClose={() => setDetail(null)}>
           <SessionInfo session={detail} />
+          {role === "Assistant Coach" &&
+            (myActiveAssignments(detail).length > 0 ? (
+              <div className="card stack">
+                <Badge>Assigned</Badge>
+                <p>
+                  <strong>Your assigned timeslots:</strong>{" "}
+                  {slotText(myAssignedSlots(detail))}
+                </p>
+              </div>
+            ) : hasCancelledAssignment(detail) ? (
+              <Badge>Cancelled</Badge>
+            ) : (
+              <Badge>Pending</Badge>
+            ))}
           <p>
             Assigned coaches:{" "}
             {state.assignments
@@ -896,20 +924,21 @@ export function Sessions() {
               .map((a) => state.coaches.find((c) => c.id === a.coachId)?.name)
               .join(", ") || "None"}
           </p>
-          {state.assignments.some(
-            (a) => a.sessionId === detail.id && a.cancelled,
-          ) && (
-            <p>
-              Cancelled assignments:{" "}
-              {state.assignments
-                .filter((a) => a.sessionId === detail.id && a.cancelled)
-                .map(
-                  (a) =>
-                    `${state.coaches.find((c) => c.id === a.coachId)?.name} (${slotText(a.slots)})`,
-                )
-                .join(", ")}
-            </p>
-          )}
+          {role === "Head Coach" &&
+            state.assignments.some(
+              (a) => a.sessionId === detail.id && a.cancelled,
+            ) && (
+              <p>
+                Cancelled assignments:{" "}
+                {state.assignments
+                  .filter((a) => a.sessionId === detail.id && a.cancelled)
+                  .map(
+                    (a) =>
+                      `${state.coaches.find((c) => c.id === a.coachId)?.name} (${slotText(a.slots)})`,
+                  )
+                  .join(", ")}
+              </p>
+            )}
         </Modal>
       )}
     </>
