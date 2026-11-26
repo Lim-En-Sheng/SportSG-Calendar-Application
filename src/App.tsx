@@ -1,4 +1,4 @@
-import { cloudEnabled } from "./firebase";
+import { cloudEnabled } from "./dataConfig";
 import { useState } from "react";
 import {
   BrowserRouter,
@@ -144,7 +144,7 @@ function Shell() {
           {cloudEnabled ? "Shared demo" : "Local prototype"} · {role} · Live
           Singapore time: {now.replace("T", " ")} (SGT) ·{" "}
           {cloudEnabled
-            ? "Shared Firestore data"
+            ? "Shared cloud data"
             : "Data saved in this browser"}
         </span>
       </footer>

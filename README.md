@@ -15,7 +15,7 @@ A coaching operations web application that brings programme scheduling, coach as
 ---
 
 > **Project status — Functional local prototype**  
-> The screens and workflows run locally with browser-saved data. Live authentication, a shared database, and connected spreadsheet accounts are not yet implemented.
+> Shared demo data uses Supabase. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md) for setup, migration and rollback. Login is still a demo account selector; authenticated role enforcement and connected spreadsheet accounts are not implemented.
 
 ## OpenAI site hosted app
 
@@ -229,7 +229,7 @@ The app uses the live Singapore clock, with no fixed Figma example date. Past-mo
 | Dates and calendar utilities | date-fns; Singapore time for verification rules              |
 | Visual styling               | CSS, shared Figma colour tokens, locally bundled Inter font  |
 | Excel exports                | write-excel-file                                             |
-| Local persistence            | Browser `localStorage`; view preferences in `sessionStorage` |
+| Shared persistence | Supabase PostgreSQL with atomic saves and live updates; optional localStorage mode |
 | Verification                 | Node.js test runner and Playwright with Microsoft Edge       |
 
 ### Project structure
@@ -284,7 +284,7 @@ Browser tests start a development server when needed. Screenshots and failure de
 | Available locally                              | Needed before a shared production launch                    |
 | :--------------------------------------------- | :---------------------------------------------------------- |
 | Demo account login and profile                 | Authentication and server-enforced permissions              |
-| Browser-saved application data                 | Shared database, backups, and multi-user synchronisation    |
+| Shared Supabase demo data | Authenticated policies, per-record queries and production backups |
 | Client-side time-window checks                 | Server-enforced submission windows and trusted timestamps   |
 | Versioned submissions and local action history | Immutable audit records and concurrent-edit handling        |
 | Downloadable spreadsheets                      | Connected Google/Microsoft accounts for direct integrations |

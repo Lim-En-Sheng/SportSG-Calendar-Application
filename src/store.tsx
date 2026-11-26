@@ -1,4 +1,4 @@
-import { cloudEnabled } from "./firebase";
+import { cloudEnabled, cloudLabel } from "./dataConfig";
 import { listenShared, saveShared, cloudError } from "./cloudStore";
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import type { ReactNode } from "react";
@@ -82,7 +82,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         revision.current = value.revision;
         setState(value.state);
         setReady(true);
-        setConnection("Shared demo connected");
+        setConnection(`${cloudLabel} shared demo connected`);
       },
       (error) => {
         setReady(false);

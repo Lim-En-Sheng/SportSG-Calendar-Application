@@ -1,4 +1,4 @@
-import { cloudEnabled } from "./firebase";
+import { cloudEnabled } from "./dataConfig";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "./store";

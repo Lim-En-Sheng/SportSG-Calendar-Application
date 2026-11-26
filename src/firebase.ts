@@ -10,5 +10,3 @@ const app = initializeApp({
   appId: "1:554633019348:web:2a9953a1cc9ebab3f96041",
 });
 export const db = getFirestore(app);
-// Tests and offline development can explicitly use the existing local demo.
-export const cloudEnabled = import.meta.env.VITE_DATA_MODE !== "local";

@@ -1,3 +1,5 @@
+> Supabase is now the default. See [SUPABASE_SETUP.md](SUPABASE_SETUP.md). This document is retained for Firebase rollback.
+
 ﻿# Firebase shared demo setup
 
 The app now uses Firestore for all demo data. The demo account selector remains unchanged; Firebase Authentication is not used.
