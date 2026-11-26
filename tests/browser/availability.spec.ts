@@ -58,14 +58,22 @@ test("programme availability uses hourly slots and confirmed links open My sessi
   await expect(
     page.locator(".daily-panel").getByRole("button", { name: /availability/i }),
   ).toHaveCount(0);
-  await page.getByRole('link', {name:'My sessions', exact:true}).click();
-  await expect(page.getByRole('heading', {name:'Basketball',exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Pending',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Pending sessions',exact:true})).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Basketball',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Cancelled',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Cancelled sessions',exact:true})).toBeVisible();
-  await page.getByRole('link',{name:'Calendar',exact:true}).click();
+  await page.getByRole("link", { name: "My sessions", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Basketball", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Pending", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Pending sessions", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Basketball", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Cancelled", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Cancelled sessions", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Calendar", exact: true }).click();
   await page.reload();
 
   await day.click({ position: { x: 15, y: 15 } });
@@ -90,10 +98,12 @@ test("programme availability uses hourly slots and confirmed links open My sessi
   await login("head");
   await day.click({ position: { x: 15, y: 15 } });
   await page.getByRole("button", { name: "Update assignments" }).click();
-  await page.getByRole("checkbox", { name: "Ryan Coo", exact: true }).check();
+  await page
+    .getByRole("checkbox", { name: "Ryan Coo, 10:15–11:15", exact: true })
+    .check();
   await expect(
-    page.getByRole("checkbox", { name: "09:00–10:00", exact: true }),
-  ).toBeDisabled();
+    page.getByRole("checkbox", { name: "Ryan Coo, 09:00–10:00", exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Submit assignments" }).click();
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("coach-calendar-v1")!),

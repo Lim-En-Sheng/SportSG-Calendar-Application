@@ -1,3 +1,4 @@
+import { AssignmentEditor } from "./AssignmentEditor";
 import { useState } from "react";
 import {
   addDays,
@@ -37,8 +38,6 @@ export function Calendar() {
   const [selected, setSelected] = useState(() => now.slice(0, 10));
   const [sessionId, setSessionId] = useState("");
   const [editing, setEditing] = useState(false);
-  const [removed, setRemoved] = useState<string[]>([]);
-  const [picked, setPicked] = useState<string[]>([]);
   const available = state.availability[coachId] ?? [];
   const [slotDate, setSlotDate] = useState<string | null>(null);
   const slotChoices = state.availabilitySlots?.[coachId] ?? {};
@@ -83,9 +82,6 @@ export function Calendar() {
           ),
       )
     : [];
-  const [newAssignments, setNewAssignments] = useState<
-    Record<string, string[]>
-  >({});
   const start = startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
     end = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
   const days = [];
@@ -94,12 +90,6 @@ export function Calendar() {
   const session = sessions.find((s) => s.id === sessionId) ?? sessions[0];
   const assigned = state.assignments.filter(
     (a) => !a.cancelled && a.sessionId === session?.id,
-  );
-  const candidates = state.coaches.filter(
-    (c) =>
-      (state.availability[c.id]?.includes(selected) &&
-        (state.availabilitySlots?.[c.id]?.[session?.id]?.length ?? 1) > 0) ||
-      assigned.some((a) => a.coachId === c.id),
   );
   const assistant = role === "Assistant Coach";
   const head = role === "Head Coach";
@@ -112,7 +102,6 @@ export function Calendar() {
     setSelected(date);
     setSessionId("");
     setEditing(false);
-    setPicked([]);
     if (
       assistant &&
       state.sessions.some((s) => s.date === date && !isAssigned(s.id))
@@ -384,7 +373,6 @@ export function Calendar() {
                         onChange={(e) => {
                           setSessionId(e.target.value);
                           setEditing(false);
-                          setPicked([]);
                         }}
                       >
                         {sessions.map((s) => (
@@ -397,169 +385,18 @@ export function Calendar() {
                   )}
                   <SessionInfo session={session} />
                   {editing ? (
-                    <>
-                      <h3>Submitted availability · {candidates.length}</h3>
-                      <p className="small muted">
-                        Select coaches and their assigned time blocks. Uncheck
-                        assigned coaches to unassign them when you submit.
-                      </p>
-                      {candidates.map((c) => {
-                        const existing = assigned.some(
-                          (a) => a.coachId === c.id,
-                        );
-                        return (
-                          <div key={c.id} className="assignment-choice">
-                            <label className="coach-check">
-                              <input
-                                type="checkbox"
-                                aria-label={c.name}
-                                checked={
-                                  existing
-                                    ? !removed.includes(c.id)
-                                    : picked.includes(c.id)
-                                }
-                                onChange={(e) => {
-                                  if (existing)
-                                    setRemoved(
-                                      e.target.checked
-                                        ? removed.filter((id) => id !== c.id)
-                                        : [...removed, c.id],
-                                    );
-                                  else
-                                    setPicked(
-                                      e.target.checked
-                                        ? [...picked, c.id]
-                                        : picked.filter((id) => id !== c.id),
-                                    );
-                                }}
-                              />
-                              <span>{c.name}</span>
-                              <small
-                                className={existing ? "success-text" : "muted"}
-                              >
-                                {existing
-                                  ? removed.includes(c.id)
-                                    ? "Will be unassigned"
-                                    : "Assigned"
-                                  : picked.includes(c.id)
-                                    ? "Selected"
-                                    : "Not assigned"}
-                              </small>
-                            </label>
-                            {!existing && picked.includes(c.id) && (
-                              <div className="stack">
-                                {blocks(session).map((b) => (
-                                  <label className="check-line" key={b.start}>
-                                    <input
-                                      type="checkbox"
-                                      disabled={
-                                        state.availabilitySlots?.[c.id]?.[
-                                          session.id
-                                        ] !== undefined &&
-                                        !state.availabilitySlots[c.id][
-                                          session.id
-                                        ].includes(b.start)
-                                      }
-                                      checked={(
-                                        newAssignments[c.id] ??
-                                        state.availabilitySlots?.[c.id]?.[
-                                          session.id
-                                        ] ??
-                                        blocks(session).map((x) => x.start)
-                                      ).includes(b.start)}
-                                      onChange={(e) => {
-                                        const previous =
-                                          newAssignments[c.id] ??
-                                          state.availabilitySlots?.[c.id]?.[
-                                            session.id
-                                          ] ??
-                                          blocks(session).map((x) => x.start);
-                                        setNewAssignments({
-                                          ...newAssignments,
-                                          [c.id]: e.target.checked
-                                            ? [...previous, b.start]
-                                            : previous.filter(
-                                                (x) => x !== b.start,
-                                              ),
-                                        });
-                                      }}
-                                    />
-                                    {b.start}–{b.end}
-                                  </label>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <Button
-                        disabled={
-                          (!picked.length && !removed.length) ||
-                          picked.some((c) => newAssignments[c]?.length === 0) ||
-                          assigned.length - removed.length + picked.length >
-                            session.needed
-                        }
-                        onClick={async () => {
-                          if (
-                            !(await commit(
-                              "Assignments updated",
-                              session.title,
-                              (s) => {
-                                for (const assignment of s.assignments) {
-                                  if (
-                                    !assignment.cancelled &&
-                                    assignment.sessionId === session.id &&
-                                    removed.includes(assignment.coachId)
-                                  ) {
-                                    assignment.cancelled = true;
-                                    for (const request of s.requests) {
-                                      if (
-                                        request.assignmentId ===
-                                          assignment.id &&
-                                        request.status === "Pending"
-                                      )
-                                        request.status = "Approved";
-                                    }
-                                  }
-                                }
-                                for (const id of picked)
-                                  s.assignments.push({
-                                    id: `ATT-${crypto.randomUUID().slice(0, 8)}`,
-                                    coachId: id,
-                                    sessionId: session.id,
-                                    slots: blocks(session).filter((b) =>
-                                      (
-                                        newAssignments[id] ??
-                                        state.availabilitySlots?.[id]?.[
-                                          session.id
-                                        ] ??
-                                        blocks(session).map((x) => x.start)
-                                      ).includes(b.start),
-                                    ),
-                                  });
-                              },
-                            ))
-                          )
-                            return;
-                          setEditing(false);
-                          setPicked([]);
-                        }}
-                      >
-                        Submit assignments
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => setEditing(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </>
+                    <AssignmentEditor
+                      key={session.id}
+                      session={session}
+                      onClose={() => setEditing(false)}
+                    />
                   ) : (
                     <>
                       <h3>
                         Assigned coaches{" "}
                         <span className="count">
-                          {assigned.length}/{session.needed}
+                          {assigned.length} coaches · {session.needed} needed
+                          per timeslot
                         </span>
                       </h3>
                       <ol className="coach-list">
@@ -572,6 +409,7 @@ export function Calendar() {
                                     ?.name
                                 }
                               </span>
+                              <small>{slotText(a.slots)}</small>
                             </div>
                           </li>
                         ))}
@@ -583,9 +421,6 @@ export function Calendar() {
                         <>
                           <Button
                             onClick={() => {
-                              setRemoved([]);
-                              setPicked([]);
-                              setNewAssignments({});
                               setEditing(true);
                             }}
                           >
@@ -908,7 +743,7 @@ export function Sessions() {
               <p>
                 {s.start}–{s.end} · {s.venue}
               </p>
-              <small>Coach Maya Chen</small>
+              <small>Head coach: {s.headCoachName || "Not assigned"}</small>
             </div>
             <Button onClick={() => setDetail(s)}>View details</Button>
             {role === "Head Coach" ? (

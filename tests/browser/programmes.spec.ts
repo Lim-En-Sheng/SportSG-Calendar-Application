@@ -12,6 +12,7 @@ test("Admin adds multiple dates, reuses names and locations, and edits from Prog
   ).toHaveCount(0);
   await page.getByRole("link", { name: "Programmes", exact: true }).click();
   await page.getByRole("button", { name: "Add programme" }).click();
+  await page.getByLabel("Head coach name *", { exact: true }).fill("Maya Chen");
   await page
     .getByLabel("Programme name *", { exact: true })
     .fill("Basketball training");

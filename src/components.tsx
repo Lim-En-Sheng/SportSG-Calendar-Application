@@ -54,6 +54,7 @@ export function SessionInfo({ session }: { session: Session }) {
         {session.end} · SGT
       </p>
       <p>{session.venue}</p>
+      <p>Head coach: {session.headCoachName || "Not assigned"}</p>
     </div>
   );
 }

@@ -13,6 +13,7 @@ export const headers = [
   "Participant capacity",
   "Coaches needed",
   "Level",
+  "Head coach name",
 ];
 const keys = [
   "title",
@@ -23,6 +24,7 @@ const keys = [
   "capacity",
   "needed",
   "level",
+  "headCoachName",
 ];
 const normalise = (v: unknown) =>
   String(v ?? "")
@@ -105,9 +107,13 @@ export function parseProgrammeRows(rows: unknown[][]): ImportResult {
     };
   const names = rows[first].map(normalise);
   const indices = keys.map((key, i) =>
-    names.findIndex((h) => h === key || h === normalise(headers[i])),
+    names.findIndex(
+      (h) => h === key.toLowerCase() || h === normalise(headers[i]),
+    ),
   );
-  const missing = headers.filter((_, i) => indices[i] < 0);
+  const missing = headers.filter(
+    (_, i) => indices[i] < 0 && keys[i] !== "headCoachName",
+  );
   if (missing.length)
     return {
       ...result,
@@ -153,7 +159,19 @@ export function parseProgrammeRows(rows: unknown[][]): ImportResult {
     else if (!Number.isSafeInteger(needed) || needed < 1)
       error = "Coaches needed must be a positive whole number.";
     else if (!level) error = "Level must be Beginner, Intermediate or Expert.";
-    const row = { title, date, start, end, venue, capacity, needed, level };
+    else if (indices[8] >= 0 && !data.headCoachName)
+      error = "Head coach name is required.";
+    const row = {
+      title,
+      date,
+      start,
+      end,
+      venue,
+      capacity,
+      needed,
+      level,
+      headCoachName: data.headCoachName || undefined,
+    };
     const signature = JSON.stringify(row);
     if (!error && seen.has(signature))
       error = "Duplicate programme row in this file.";
@@ -200,12 +218,14 @@ export async function templateBlob(): Promise<Blob> {
     backgroundColor: "#163c32",
     textColor: "#ffffff",
   }));
-  const columns = [36, 18, 16, 16, 30, 24, 20, 20].map((width) => ({ width }));
+  const columns = [36, 18, 16, 16, 30, 24, 20, 20, 28].map((width) => ({
+    width,
+  }));
   const instructions = [
     ["Programme import template", "How to use"],
     [
       "1. Enter your programmes",
-      "Use the Programmes sheet. Keep row 1 headers and start entering data at row 2. All eight columns are required.",
+      "Use the Programmes sheet. Keep row 1 headers and start entering data at row 2. All nine columns are required. Head coach name identifies the coach leading that programme.",
     ],
     [
       "2. One row per date",
@@ -230,7 +250,7 @@ export async function templateBlob(): Promise<Blob> {
     ],
     [
       "CSV alternative",
-      "Save only the Programmes sheet as CSV. Keep the same headers. Original title,date,start,end,venue,capacity,needed,level headers also work.",
+      "Save only the Programmes sheet as CSV. Keep the same headers. Original title,date,start,end,venue,capacity,needed,level headers also work; older sheets without a head coach column import as Not assigned.",
     ],
     [
       "Important",
@@ -270,6 +290,7 @@ export async function templateBlob(): Promise<Blob> {
             20,
             2,
             "Beginner",
+            "Maya Chen",
           ],
           [
             "Academy Coaching - Beginner",

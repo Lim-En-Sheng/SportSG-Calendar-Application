@@ -1,4 +1,5 @@
-﻿import {
+import { assignmentBlocks } from "./model";
+import {
   readProgrammeFile,
   templateBlob,
   type ImportResult,
@@ -89,6 +90,7 @@ export function Programmes() {
                   <th>Programme</th>
                   <th>Capacity</th>
                   <th>Level</th>
+                  <th>Head coach</th>
                   <th>Location</th>
                   <th>Date & time</th>
                   {role === "Admin" && (
@@ -104,6 +106,7 @@ export function Programmes() {
                       <td>{s.title}</td>
                       <td>{s.capacity} pax</td>
                       <td>{s.level}</td>
+                      <td>{s.headCoachName || "Not assigned"}</td>
                       <td>{s.venue}</td>
                       <td>
                         {format(parseISO(s.date), "d MMM yyyy")}
@@ -289,6 +292,7 @@ function CsvImportModal({
                     <th>Capacity</th>
                     <th>Coaches needed</th>
                     <th>Level</th>
+                    <th>Head coach</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -303,6 +307,7 @@ function CsvImportModal({
                       <td>{row.capacity}</td>
                       <td>{row.needed}</td>
                       <td>{row.level}</td>
+                      <td>{row.headCoachName || "Not assigned"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -364,6 +369,7 @@ function ProgrammeEditor({
       capacity: 20,
       level: "Intermediate",
       venue: "",
+      headCoachName: "",
       date: now.slice(0, 10),
       start: "09:00",
       end: "10:30",
@@ -404,21 +410,33 @@ function ProgrammeEditor({
               );
               return;
             }
-            if (
-              session &&
-              value.needed <
-                state.assignments.filter(
-                  (a) => !a.cancelled && a.sessionId === session.id,
-                ).length
-            ) {
-              setError(
-                "Coaches needed cannot be less than the number already assigned.",
+            if (session) {
+              const assignments = state.assignments.filter(
+                (a) => !a.cancelled && a.sessionId === session.id,
               );
-              return;
+              const starts = assignments.flatMap((a) =>
+                assignmentBlocks(a, session).map((b) => b.start),
+              );
+              if (
+                starts.some(
+                  (start) =>
+                    assignments.filter((a) =>
+                      assignmentBlocks(a, session).some(
+                        (b) => b.start <= start && b.end > start,
+                      ),
+                    ).length > value.needed,
+                )
+              ) {
+                setError(
+                  "Coaches needed cannot be less than the number assigned to any timeslot.",
+                );
+                return;
+              }
             }
             if (
               !value.title.trim() ||
               !value.venue.trim() ||
+              !value.headCoachName?.trim() ||
               !value.date ||
               value.start >= value.end ||
               value.capacity < 1 ||
@@ -438,6 +456,7 @@ function ProgrammeEditor({
                     ...value,
                     title: value.title.trim(),
                     venue: value.venue.trim(),
+                    headCoachName: value.headCoachName?.trim(),
                   };
                   if (session) {
                     const index = s.sessions.findIndex(
@@ -461,6 +480,25 @@ function ProgrammeEditor({
           }}
         >
           <h2>Programme details</h2>
+          <label>
+            Head coach name *
+            <input
+              required
+              value={value.headCoachName ?? ""}
+              onChange={(e) => update("headCoachName", e.target.value)}
+              list="head-coach-names"
+              placeholder="Full name of assigned head coach"
+            />
+          </label>
+          <datalist id="head-coach-names">
+            {[
+              ...new Set(
+                state.sessions.map((s) => s.headCoachName).filter(Boolean),
+              ),
+            ].map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <label>
             Programme name *
             <input

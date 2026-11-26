@@ -3,6 +3,7 @@ export type Slot = { start: string; end: string };
 export type Mark = "Present" | "Absent" | "Not marked";
 export type Coach = { id: string; name: string };
 export type Session = {
+  headCoachName?: string;
   id: string;
   title: string;
   date: string;
