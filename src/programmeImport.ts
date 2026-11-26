@@ -198,7 +198,7 @@ export async function templateBlob(): Promise<Blob> {
     value,
     fontWeight: "bold" as const,
     backgroundColor: "#163c32",
-    color: "#ffffff",
+    textColor: "#ffffff",
   }));
   const columns = [36, 18, 16, 16, 30, 24, 20, 20].map((width) => ({ width }));
   const instructions = [
@@ -244,7 +244,7 @@ export async function templateBlob(): Promise<Blob> {
         ? {
             fontWeight: "bold" as const,
             backgroundColor: "#163c32",
-            color: "#ffffff",
+            textColor: "#ffffff",
           }
         : {}),
     })),
