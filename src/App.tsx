@@ -166,9 +166,6 @@ function Shell() {
               <p className="small muted">Basketball Academy</p>
             </div>
           </div>
-          <p className="small muted">
-            Local demo account - Data saved in this browser.
-          </p>
           <Button
             onClick={() => {
               setProfile(false);
